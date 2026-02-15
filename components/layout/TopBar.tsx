@@ -1,48 +1,67 @@
 "use client"
 
 interface Props {
-  role: string
-  setRole: (r: any) => void
+  activeRole?: string | null
+  roles?: string[]
+  setActiveRole: (role: string) => void
   openFirstTask: () => void
   closeDrawer: () => void
 }
 
-export default function Topbar({
-  role,
-  setRole,
+export default function TopBar({
+  activeRole,
+  roles = [],
+  setActiveRole,
   openFirstTask,
   closeDrawer,
 }: Props) {
   const roleLabel =
-    role === "task-taker"
+    activeRole === "TASK_RECEIVER"
       ? "Tasks Received"
-      : role === "task-giver"
+      : activeRole === "TASK_CREATOR"
       ? "Tasks Given"
-      : "Admin View"
+      : activeRole === "ADMIN"
+      ? "Admin View"
+      : ""
 
   return (
     <div className="bg-white rounded-2xl border p-4 flex justify-between items-center">
       <h2 className="font-semibold">{roleLabel}</h2>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <button
           className="px-3 py-1 rounded-lg border"
-          onClick={() => {
-            openFirstTask()
-          }}
+          onClick={openFirstTask}
         >
           Drawer
         </button>
 
-        <select
-          className="border rounded-lg px-2"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          <option value="task-taker">Task Received</option>
-          <option value="task-giver">Tasks Given</option>
-          <option value="admin">Admin View</option>
-        </select>
+        {/* Role Switcher */}
+        {roles.length > 1 && (
+          <select
+            className="border rounded-lg px-2"
+            value={activeRole ?? ""}
+            onChange={(e) => setActiveRole(e.target.value)}
+          >
+            {roles.includes("TASK_RECEIVER") && (
+              <option value="TASK_RECEIVER">
+                Tasks Received
+              </option>
+            )}
+
+            {roles.includes("TASK_CREATOR") && (
+              <option value="TASK_CREATOR">
+                Tasks Given
+              </option>
+            )}
+
+            {roles.includes("ADMIN") && (
+              <option value="ADMIN">
+                Admin View
+              </option>
+            )}
+          </select>
+        )}
       </div>
     </div>
   )

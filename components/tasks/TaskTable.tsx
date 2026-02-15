@@ -1,13 +1,17 @@
+"use client"
+
 interface Props {
   tasks: any[]
   loading: boolean
-  onClickTask: (id: number) => void
-  onDoubleClickTask: (id: number) => void
+  mode: string | null
+  onClickTask: (task: any) => void
+  onDoubleClickTask: (task: any) => void
 }
 
 export default function TaskTable({
   tasks,
   loading,
+  mode,
   onClickTask,
   onDoubleClickTask,
 }: Props) {
@@ -40,9 +44,23 @@ export default function TaskTable({
             className="bg-neutral-200 p-4 rounded-xl hover:bg-neutral-300 cursor-pointer"
           >
             <div className="font-medium">{task.title}</div>
+
             <div className="text-sm text-neutral-600">
               {task.status}
             </div>
+
+            {/* Role-based projection */}
+            {mode === "TASK_CREATOR" && (
+              <div className="text-xs text-neutral-500 mt-1">
+                Assigned To: {task.assigned_to?.full_name}
+              </div>
+            )}
+
+            {mode === "TASK_RECEIVER" && (
+              <div className="text-xs text-neutral-500 mt-1">
+                Given By: {task.created_by?.full_name}
+              </div>
+            )}
           </div>
         ))}
       </div>

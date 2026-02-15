@@ -5,7 +5,12 @@ export const setTokens = (access: string, refresh: string): void => {
   localStorage.setItem("refresh", refresh)
 }
 
-const getAccessToken = () => {
+export const clearTokens = (): void => {
+  localStorage.removeItem("access")
+  localStorage.removeItem("refresh")
+}
+
+export const getAccessToken = () => {
   if (typeof window === "undefined") return null
   return localStorage.getItem("access")
 }
@@ -43,14 +48,19 @@ export const apiFetch = async (
   let access = getAccessToken()
 
   const makeRequest = async (token: string | null) => {
-    return fetch(`${BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-    })
+    const activeRole =
+      typeof window !== "undefined"
+        ? localStorage.getItem("activeRole")
+        : null
+      return fetch(`${BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...(activeRole && { "X-Active-Role": activeRole }),
+          ...options.headers,
+        },
+      })
   }
 
   let res = await makeRequest(access)

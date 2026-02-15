@@ -6,11 +6,11 @@ import TaskDrawer from "@/components/tasks/TaskDrawer"
 import TaskFullView from "@/components/tasks/TaskFullView"
 import { useEffect, useState } from "react"
 import { getTasks } from "@/lib/api"
-
-type Role = "task-taker" | "task-giver" | "admin"
+import { useAuth } from "@/context/AuthContext"
 
 export default function DashboardPage() {
-  const [role, setRole] = useState<Role>("task-taker")
+  const { roles, activeRole, setActiveRole } = useAuth()
+
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
   const [fullViewTask, setFullViewTask] = useState<any | null>(null)
   const [tasks, setTasks] = useState<any[]>([])
@@ -20,7 +20,6 @@ export default function DashboardPage() {
     async function loadTasks() {
       try {
         const data = await getTasks()
-        console.log("API RESPONSE:", data)
 
         if (Array.isArray(data)) {
           setTasks(data)
@@ -36,8 +35,10 @@ export default function DashboardPage() {
       }
     }
 
-    loadTasks()
-  }, [])
+    if (activeRole) {
+      loadTasks()
+    }
+  }, [activeRole])
 
   const toggleDrawer = (task: any) => {
     if (selectedTask?.id === task.id) {
@@ -49,9 +50,11 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* TOP BAR */}
       <TopBar
-        role={role}
-        setRole={setRole}
+        activeRole={activeRole}
+        roles={roles}
+        setActiveRole={setActiveRole}
         openFirstTask={() => {
           if (tasks.length > 0) {
             setSelectedTask(tasks[0])
@@ -62,32 +65,30 @@ export default function DashboardPage() {
 
       <div className="flex flex-1 gap-6 mt-6 overflow-hidden">
         {fullViewTask ? (
-        <TaskFullView
+          <TaskFullView
             task={fullViewTask}
             onClose={() => setFullViewTask(null)}
             onUpdate={(updatedTask) => {
-            // Update tasks array
-            setTasks(prev =>
+              setTasks(prev =>
                 prev.map(t =>
-                t.id === updatedTask.id ? updatedTask : t
+                  t.id === updatedTask.id ? updatedTask : t
                 )
-            )
+              )
 
-            // Update full view task
-            setFullViewTask(updatedTask)
+              setFullViewTask(updatedTask)
 
-            // Update drawer task if open
-            if (selectedTask?.id === updatedTask.id) {
+              if (selectedTask?.id === updatedTask.id) {
                 setSelectedTask(updatedTask)
-            }
+              }
             }}
-        />
+          />
         ) : (
           <>
             <div className="flex-1">
               <TaskTable
                 tasks={tasks}
                 loading={loading}
+                mode={activeRole}   // 👈 role-aware mode
                 onClickTask={toggleDrawer}
                 onDoubleClickTask={(task) => setFullViewTask(task)}
               />

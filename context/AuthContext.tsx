@@ -1,18 +1,74 @@
 "use client"
 
-import { createContext, useContext, useState } from "react"
-import { setTokens } from "@/lib/api"
+import { createContext, useContext, useState, useEffect } from "react"
+import { setTokens, getAccessToken, clearTokens } from "@/lib/api"
 
 type AuthContextType = {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
+  user: any
+  roles: string[]
+  activeRole: string | null
+  setActiveRole: (role: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [roles, setRoles] = useState<string[]>([])
+  const [activeRole, setActiveRoleState] = useState<string | null>(null)
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+  setHydrated(true)
+  }, [])
+
+  // Fetch user + roles
+  const fetchMe = async () => {
+    const token = getAccessToken()
+    if (!token) {
+      setIsAuthenticated(false)
+      return
+    }
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/me/`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    )
+
+    if (!res.ok) {
+      setIsAuthenticated(false)
+      return
+    }
+
+    const data = await res.json()
+
+    setUser(data)
+    setRoles(data.roles)
+    setIsAuthenticated(true)
+
+    let savedRole = localStorage.getItem("activeRole")
+
+    if (!savedRole || !data.roles.includes(savedRole)) {
+      savedRole = data.roles[0] ?? null
+    }
+
+    if (savedRole) {
+      setActiveRoleState(savedRole)
+      localStorage.setItem("activeRole", savedRole)
+    }
+  }
+
+  useEffect(() => {
+    fetchMe()
+  }, [])
 
   const login = async (email: string, password: string) => {
     const res = await fetch(
@@ -27,16 +83,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!res.ok) throw new Error("Invalid credentials")
 
     const data = await res.json()
+
     setTokens(data.access, data.refresh)
-    setIsAuthenticated(true)
+    await fetchMe()
   }
 
   const logout = () => {
+    clearTokens()
+    localStorage.removeItem("activeRole")
     setIsAuthenticated(false)
+    setUser(null)
+    setRoles([])
+    setActiveRoleState(null)
   }
 
+  const setActiveRole = (role: string) => {
+    setActiveRoleState(role)
+    localStorage.setItem("activeRole", role)
+  }
+
+  if (!hydrated) return null
+
   return (
-    <AuthContext.Provider value={{ login, logout, isAuthenticated }}>
+    <AuthContext.Provider
+      value={{
+        login,
+        logout,
+        isAuthenticated,
+        user,
+        roles,
+        activeRole,
+        setActiveRole,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
