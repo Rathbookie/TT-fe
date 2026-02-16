@@ -4,42 +4,27 @@ interface Props {
   activeRole?: string | null
   roles?: string[]
   setActiveRole: (role: string) => void
-  openFirstTask: () => void
-  closeDrawer: () => void
+  toggleDrawer: () => void
+  openCreateTask: () => void
 }
 
 export default function TopBar({
   activeRole,
   roles = [],
   setActiveRole,
-  openFirstTask,
-  closeDrawer,
+  toggleDrawer,
+  openCreateTask,
 }: Props) {
-  const roleLabel =
-    activeRole === "TASK_RECEIVER"
-      ? "Tasks Received"
-      : activeRole === "TASK_CREATOR"
-      ? "Tasks Given"
-      : activeRole === "ADMIN"
-      ? "Admin View"
-      : ""
 
   return (
-    <div className="bg-white rounded-2xl border p-4 flex justify-between items-center">
-      <h2 className="font-semibold">{roleLabel}</h2>
+    <div className="bg-white rounded-lg border p-4 flex justify-between items-center">
 
-      <div className="flex gap-2 items-center">
-        <button
-          className="px-3 py-1 rounded-lg border"
-          onClick={openFirstTask}
-        >
-          Drawer
-        </button>
+      {/* LEFT SIDE — ROLE SWITCH */}
+      <div className="flex items-center gap-4">
 
-        {/* Role Switcher */}
         {roles.length > 1 && (
           <select
-            className="border rounded-lg px-2"
+            className="border rounded-lg px-3 py-2 text-sm"
             value={activeRole ?? ""}
             onChange={(e) => setActiveRole(e.target.value)}
           >
@@ -62,6 +47,26 @@ export default function TopBar({
             )}
           </select>
         )}
+
+      </div>
+
+      {/* RIGHT SIDE — ACTIONS */}
+      <div className="flex gap-3 items-center">
+
+        <button
+          className="px-4 py-2 rounded-lg border text-sm"
+          onClick={openCreateTask}
+        >
+          Add Task
+        </button>
+
+        <button
+          className="px-4 py-2 rounded-lg border text-sm"
+          onClick={toggleDrawer}
+        >
+          Drawer
+        </button>
+
       </div>
     </div>
   )

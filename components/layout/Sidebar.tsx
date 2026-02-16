@@ -12,7 +12,7 @@ export default function Sidebar() {
         ${collapsed ? "w-24" : "w-72"}
         transition-all duration-300
         bg-neutral-100
-        rounded-3xl
+        rounded-lg
         p-6
         flex flex-col
       `}
@@ -82,7 +82,7 @@ function MenuItem({
       className={`
         flex items-center
         ${collapsed ? "justify-center" : "gap-4"}
-        px-4 py-3 rounded-2xl cursor-pointer
+        px-4 py-3 rounded-lg cursor-pointer
         ${active ? "bg-neutral-200" : "hover:bg-neutral-200"}
       `}
     >

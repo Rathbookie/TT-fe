@@ -1,75 +1,119 @@
 "use client"
 
-import { useState } from "react"
-import { apiFetch } from "@/lib/api"
 import { Task } from "@/types/task"
 
 type Props = {
   task: Task
-  onUpdated: () => void
+  role: string | null
+  onClick: () => void
+  onDoubleClick: () => void
 }
 
-export default function TaskRow({ task, onUpdated }: Props) {
-  const [title, setTitle] = useState(task.title)
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
+export default function TaskRow({
+  task,
+  role,
+  onClick,
+  onDoubleClick,
+}: Props) {
 
-  const save = async () => {
-    if (title === task.title) {
-      setEditing(false)
-      return
-    }
+  const assignmentValue =
+    role === "TASK_RECEIVER"
+      ? task.created_by?.full_name
+      : task.assigned_to?.full_name
 
-    setSaving(true)
+  const isOverdue =
+    task.due_date &&
+    new Date(task.due_date) < new Date() &&
+    task.status !== "DONE"
 
-    const res = await apiFetch(`/api/tasks/${task.id}/`, {
-      method: "PUT",
-      body: JSON.stringify({
-        ...task,
-        title,
-        version: task.version,
-      }),
-    })
+  const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString()
 
-    if (res.status === 409) {
-      alert("Task updated elsewhere. Refreshing.")
-      onUpdated()
-    } else if (res.ok) {
-      onUpdated()
-    }
+  return (
+    <tr
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      className="border-b border-neutral-200 hover:bg-neutral-50 transition cursor-pointer h-[64px]"
+    >
+      {/* Task Name */}
+      <td className="px-6 py-4 font-medium text-neutral-900">
+        {task.title}
+      </td>
 
-    setSaving(false)
-    setEditing(false)
+      {/* Status */}
+      <td className="px-6 py-4">
+        <StatusBadge status={task.status} />
+      </td>
+
+      {/* Due */}
+      <td className="px-6 py-4 text-sm">
+        <span className={isOverdue ? "text-red-600 font-medium" : "text-neutral-600"}>
+          {task.due_date ? formatDate(task.due_date) : "—"}
+        </span>
+      </td>
+
+      {/* Assignment */}
+      <td className="px-6 py-4 text-sm text-neutral-600">
+        {assignmentValue || "—"}
+      </td>
+
+      {/* Priority */}
+      <td className="px-6 py-4">
+        <PriorityBadge priority={task.priority || ""} />
+      </td>
+    </tr>
+  )
+}
+
+/* ----------------- */
+/* Status Badge */
+/* ----------------- */
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    NOT_STARTED: "bg-neutral-200 text-neutral-700",
+    IN_PROGRESS: "bg-blue-100 text-blue-700",
+    BLOCKED: "bg-red-100 text-red-700",
+    WAITING: "bg-yellow-100 text-yellow-700",
+    DONE: "bg-green-100 text-green-700",
+    CANCELLED: "bg-neutral-300 text-neutral-600",
   }
 
   return (
-    <tr className="border-b last:border-none hover:bg-neutral-50 transition">
-      <td className="px-6 py-4">
-        {editing ? (
-          <input
-            className="w-full border rounded-md px-2 py-1 text-sm"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={save}
-            autoFocus
-          />
-        ) : (
-          <div
-            onClick={() => setEditing(true)}
-            className="cursor-text"
-          >
-            {saving ? "Saving..." : title}
-          </div>
-        )}
-      </td>
+    <span
+      className={`px-3 py-1 text-xs rounded-full ${styles[status] || "bg-neutral-200"}`}
+    >
+      {status.replace("_", " ")}
+    </span>
+  )
+}
 
-      <td className="px-6 py-4 text-neutral-500">
-        {task.status}
-      </td>
+/* ----------------- */
+/* Priority Badge */
+/* ----------------- */
 
-      <td className="px-6 py-4 text-neutral-400">
-        {task.version}
-      </td>
-    </tr>
+function PriorityBadge({ priority }: { priority: string }) {
+  const styles: Record<string, string> = {
+    P1: "bg-red-100 text-red-700",
+    P2: "bg-orange-100 text-orange-700",
+    P3: "bg-blue-100 text-blue-700",
+    P4: "bg-green-100 text-green-700",
+  }
+
+  const labels: Record<string, string> = {
+    P1: "Critical",
+    P2: "High",
+    P3: "Normal",
+    P4: "Low",
+  }
+
+  if (!priority) return <span className="text-sm text-neutral-400">—</span>
+
+  return (
+    <span
+      className={`px-3 py-1 text-xs rounded-full ${styles[priority]}`}
+    >
+      {labels[priority]}
+    </span>
   )
 }

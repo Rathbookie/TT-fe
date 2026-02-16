@@ -1,96 +1,83 @@
 "use client"
 
 import TopBar from "@/components/layout/TopBar"
-import TaskTable from "@/components/tasks/TaskTable"
+import { useAuth } from "@/context/AuthContext"
+import { useTasks } from "./useTasks"
 import TaskDrawer from "@/components/tasks/TaskDrawer"
 import TaskFullView from "@/components/tasks/TaskFullView"
-import { useEffect, useState } from "react"
-import { getTasks } from "@/lib/api"
-import { useAuth } from "@/context/AuthContext"
+import TaskTable from "@/components/tasks/TaskTable"
+import { apiFetchJson } from "@/lib/api"
+
 
 export default function DashboardPage() {
   const { roles, activeRole, setActiveRole } = useAuth()
 
-  const [selectedTask, setSelectedTask] = useState<any | null>(null)
-  const [fullViewTask, setFullViewTask] = useState<any | null>(null)
-  const [tasks, setTasks] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    tasks,
+    loading,
+    selectedTask,
+    setSelectedTask,
+    fullViewTask,
+    setFullViewTask,
+    toggleDrawer,
+    toggleDrawerFromTopBar,
+    updateTaskInState,
+  } = useTasks()
 
-  useEffect(() => {
-    async function loadTasks() {
-      try {
-        const data = await getTasks()
+  if (!activeRole) return null
 
-        if (Array.isArray(data)) {
-          setTasks(data)
-        } else if (data.results) {
-          setTasks(data.results)
-        } else {
-          setTasks([])
-        }
-      } catch (err) {
-        console.error("Task fetch error:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (activeRole) {
-      loadTasks()
-    }
-  }, [activeRole])
-
-  const toggleDrawer = (task: any) => {
-    if (selectedTask?.id === task.id) {
-      setSelectedTask(null)
-    } else {
-      setSelectedTask(task)
-    }
+  const openCreateTask = () => {
+    setFullViewTask({
+      id: null,
+      title: "",
+      description: "",
+      status: "NOT_STARTED",
+      priority: null,
+      due_date: null,
+      assigned_to: null,
+      version: 0,
+      created_at: "",
+      updated_at: "",
+    })
   }
 
   return (
     <>
-      {/* TOP BAR */}
       <TopBar
         activeRole={activeRole}
         roles={roles}
         setActiveRole={setActiveRole}
-        openFirstTask={() => {
-          if (tasks.length > 0) {
-            setSelectedTask(tasks[0])
-          }
-        }}
-        closeDrawer={() => setSelectedTask(null)}
+        toggleDrawer={toggleDrawerFromTopBar}
+        openCreateTask={openCreateTask}
       />
 
       <div className="flex flex-1 gap-6 mt-6 overflow-hidden">
         {fullViewTask ? (
-          <TaskFullView
-            task={fullViewTask}
-            onClose={() => setFullViewTask(null)}
-            onUpdate={(updatedTask) => {
-              setTasks(prev =>
-                prev.map(t =>
-                  t.id === updatedTask.id ? updatedTask : t
-                )
-              )
-
-              setFullViewTask(updatedTask)
-
-              if (selectedTask?.id === updatedTask.id) {
-                setSelectedTask(updatedTask)
-              }
-            }}
-          />
+          <div className="flex-1">
+            <TaskFullView
+              task={fullViewTask}
+              mode={fullViewTask.id ? "edit" : "create"}
+              onClose={() => setFullViewTask(null)}
+              onSaved={(savedTask) => {
+                updateTaskInState(savedTask)
+                setFullViewTask(null)
+              }}
+            />
+          </div>
         ) : (
           <>
             <div className="flex-1">
               <TaskTable
                 tasks={tasks}
                 loading={loading}
-                mode={activeRole}   // 👈 role-aware mode
+                role={activeRole}
+                assignmentColumn={
+                  activeRole === "TASK_RECEIVER"
+                    ? "Assigned By"
+                    : "Assigned To"
+                }
                 onClickTask={toggleDrawer}
-                onDoubleClickTask={(task) => setFullViewTask(task)}
+                onDoubleClickTask={setFullViewTask}
               />
             </div>
 
@@ -99,6 +86,13 @@ export default function DashboardPage() {
                 <TaskDrawer
                   task={selectedTask}
                   onClose={() => setSelectedTask(null)}
+                  onEdit={async (taskId) => {
+                    const fullTask = await apiFetchJson(
+                      `/api/tasks/${taskId}/`
+                    )
+                    setSelectedTask(null)      // close drawer
+                    setFullViewTask(fullTask)  // open editor
+                  }}
                 />
               </div>
             )}

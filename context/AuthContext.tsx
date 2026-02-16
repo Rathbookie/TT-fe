@@ -83,6 +83,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!res.ok) throw new Error("Invalid credentials")
 
     const data = await res.json()
+    console.log("ROLES FROM API:", data.roles)
 
     setTokens(data.access, data.refresh)
     await fetchMe()

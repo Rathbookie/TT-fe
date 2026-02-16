@@ -52,15 +52,18 @@ export const apiFetch = async (
       typeof window !== "undefined"
         ? localStorage.getItem("activeRole")
         : null
-      return fetch(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-          ...(activeRole && { "X-Active-Role": activeRole }),
-          ...options.headers,
-        },
-      })
+
+    return fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        ...(options.body instanceof FormData
+          ? {}
+          : { "Content-Type": "application/json" }),
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(activeRole && { "X-Active-Role": activeRole }),
+        ...options.headers,
+      },
+    })
   }
 
   let res = await makeRequest(access)
@@ -72,6 +75,22 @@ export const apiFetch = async (
   }
 
   return res
+}
+
+export const apiFetchJson = async <T = any>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> => {
+  const res = await apiFetch(endpoint, options)
+
+  if (!res.ok) {
+    console.error("API ERROR:", res.status)
+    const text = await res.text()
+    console.error("Response body:", text)
+    throw new Error("API error")
+  }
+
+  return res.json()
 }
 
 export const getTasks = async () => {
