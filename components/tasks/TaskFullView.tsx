@@ -204,6 +204,7 @@ export default function TaskFullView({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+          maxLength={120}
         />
       </div>
 

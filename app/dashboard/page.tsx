@@ -8,7 +8,6 @@ import TaskFullView from "@/components/tasks/TaskFullView"
 import TaskTable from "@/components/tasks/TaskTable"
 import { apiFetchJson } from "@/lib/api"
 
-
 export default function DashboardPage() {
   const { roles, activeRole, setActiveRole } = useAuth()
 
@@ -22,6 +21,10 @@ export default function DashboardPage() {
     toggleDrawer,
     toggleDrawerFromTopBar,
     updateTaskInState,
+    currentPage,
+    totalPages,
+    count,
+    setCurrentPage,
   } = useTasks()
 
   if (!activeRole) return null
@@ -76,6 +79,10 @@ export default function DashboardPage() {
                     ? "Assigned By"
                     : "Assigned To"
                 }
+                currentPage={currentPage}
+                totalPages={totalPages}
+                count={count}
+                onPageChange={setCurrentPage}
                 onClickTask={toggleDrawer}
                 onDoubleClickTask={setFullViewTask}
               />
@@ -90,8 +97,8 @@ export default function DashboardPage() {
                     const fullTask = await apiFetchJson(
                       `/api/tasks/${taskId}/`
                     )
-                    setSelectedTask(null)      // close drawer
-                    setFullViewTask(fullTask)  // open editor
+                    setSelectedTask(null)
+                    setFullViewTask(fullTask)
                   }}
                 />
               </div>

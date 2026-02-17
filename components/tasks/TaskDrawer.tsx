@@ -47,13 +47,13 @@ export default function TaskDrawer({ task, onClose, onEdit }: Props) {
     <div className="h-full w-full bg-white border border-neutral-200 rounded-lg flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200">
-        <div>
-          <h2 className="text-lg font-semibold text-neutral-900">
+      <div className="flex items-start justify-between px-6 py-5 border-b border-neutral-200">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold text-neutral-900 break-words whitespace-normal">
             {task.title}
           </h2>
 
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-3 flex-wrap">
             <StatusBadge status={task.status} />
             <PriorityBadge priority={task.priority} />
           </div>
@@ -61,7 +61,7 @@ export default function TaskDrawer({ task, onClose, onEdit }: Props) {
 
         <button
           onClick={onClose}
-          className="text-neutral-500 hover:text-neutral-900 text-xl"
+          className="ml-4 text-neutral-500 hover:text-neutral-900 text-xl flex-shrink-0"
         >
           ×
         </button>

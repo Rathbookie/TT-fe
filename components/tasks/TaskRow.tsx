@@ -33,33 +33,41 @@ export default function TaskRow({
     <tr
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className="border-b border-neutral-200 hover:bg-neutral-50 transition cursor-pointer h-[64px]"
+      className="border-b border-neutral-200 hover:bg-neutral-50 transition cursor-pointer h-[48px]"
     >
       {/* Task Name */}
-      <td className="px-6 py-4 font-medium text-neutral-900">
+      <td className="px-6 py-2.5 font-medium text-neutral-900">
+        <div className="truncate whitespace-nowrap overflow-hidden">
         {task.title}
+        </div>
       </td>
 
       {/* Status */}
-      <td className="px-6 py-4">
+      <td className="px-6 py-2.5">
+        <div className="truncate whitespace-nowrap overflow-hidden">
         <StatusBadge status={task.status} />
+        </div>
       </td>
 
       {/* Due */}
-      <td className="px-6 py-4 text-sm">
+      <td className="px-6 py-2.5 text-sm">
         <span className={isOverdue ? "text-red-600 font-medium" : "text-neutral-600"}>
           {task.due_date ? formatDate(task.due_date) : "—"}
         </span>
       </td>
 
       {/* Assignment */}
-      <td className="px-6 py-4 text-sm text-neutral-600">
+      <td className="px-6 py-2.5 text-sm text-neutral-600">
+        <div className="truncate whitespace-nowrap overflow-hidden">
         {assignmentValue || "—"}
+        </div>
       </td>
 
       {/* Priority */}
-      <td className="px-6 py-4">
+      <td className="px-6 py-2.5">
+        <div className="truncate whitespace-nowrap overflow-hidden">
         <PriorityBadge priority={task.priority || ""} />
+        </div>
       </td>
     </tr>
   )
