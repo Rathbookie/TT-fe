@@ -12,7 +12,7 @@ export const STATUS_CONFIG = {
     color: "bg-red-50 text-red-600",
   },
   WAITING: {
-    label: "Waiting",
+    label: "Waiting Approval",
     color: "bg-amber-50 text-amber-600",
   },
   DONE: {
@@ -24,3 +24,40 @@ export const STATUS_CONFIG = {
     color: "bg-zinc-200 text-zinc-500",
   },
 } as const
+
+// Derive status type automatically
+export type TaskStatus = keyof typeof STATUS_CONFIG
+
+// Define role type explicitly
+export type Role = "TASK_RECEIVER" | "TASK_CREATOR" | "ADMIN"
+
+// Fully typed transition map
+export const allowedTransitions: Record<
+  Role,
+  Record<TaskStatus, TaskStatus[]>
+> = {
+  TASK_RECEIVER: {
+    NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    BLOCKED: ["IN_PROGRESS", "CANCELLED"],
+    WAITING: [],
+    DONE: [],
+    CANCELLED: [],
+  },
+  TASK_CREATOR: {
+    NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    BLOCKED: ["IN_PROGRESS", "CANCELLED"],
+    WAITING: ["DONE", "IN_PROGRESS", "CANCELLED"],
+    DONE: [],
+    CANCELLED: [],
+  },
+  ADMIN: {
+    NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    BLOCKED: ["IN_PROGRESS", "CANCELLED"],
+    WAITING: ["DONE", "IN_PROGRESS", "CANCELLED"],
+    DONE: ["IN_PROGRESS", "CANCELLED"],
+    CANCELLED: [],
+  },
+}

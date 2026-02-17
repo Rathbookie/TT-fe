@@ -33,7 +33,7 @@ export default function TaskRow({
     <tr
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className="border-b border-neutral-200 hover:bg-neutral-50 transition cursor-pointer h-[48px]"
+      className="border-b border-neutral-200 hover:bg-neutral-50 transition cursor-pointer h-[52px]"
     >
       {/* Task Name */}
       <td className="px-6 py-2.5 font-medium text-neutral-900">

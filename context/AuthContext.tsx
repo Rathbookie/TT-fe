@@ -2,15 +2,16 @@
 
 import { createContext, useContext, useState, useEffect } from "react"
 import { setTokens, getAccessToken, clearTokens } from "@/lib/api"
+import { Role } from "@/lib/statusConfig"
 
 type AuthContextType = {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
   user: any
-  roles: string[]
-  activeRole: string | null
-  setActiveRole: (role: string) => void
+  roles: Role[]
+  activeRole: Role | null
+  setActiveRole: (role: Role) => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -18,8 +19,8 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState<any>(null)
-  const [roles, setRoles] = useState<string[]>([])
-  const [activeRole, setActiveRoleState] = useState<string | null>(null)
+  const [roles, setRoles] = useState<Role[]>([])
+  const [activeRole, setActiveRoleState] = useState<Role | null>(null)
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
@@ -51,13 +52,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const data = await res.json()
 
     setUser(data)
-    setRoles(data.roles)
+    setRoles(data.roles as Role[])
     setIsAuthenticated(true)
 
-    let savedRole = localStorage.getItem("activeRole")
+    let savedRole = localStorage.getItem("activeRole") as Role | null
 
-    if (!savedRole || !data.roles.includes(savedRole)) {
-      savedRole = data.roles[0] ?? null
+    const apiRoles = data.roles as Role[]
+    setRoles(apiRoles)
+
+    if (!savedRole || !apiRoles.includes(savedRole)) {
+      savedRole = apiRoles[0] ?? null
     }
 
     if (savedRole) {
@@ -98,7 +102,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setActiveRoleState(null)
   }
 
-  const setActiveRole = (role: string) => {
+  const setActiveRole = (role: Role) => {
     setActiveRoleState(role)
     localStorage.setItem("activeRole", role)
   }

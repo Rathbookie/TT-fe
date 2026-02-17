@@ -1,16 +1,10 @@
+import { TaskStatus } from "@/lib/statusConfig"
+
 export type UserProjection = {
   id: number
   full_name: string
   email: string
 }
-
-export type TaskStatus =
-  | "NOT_STARTED"
-  | "IN_PROGRESS"
-  | "BLOCKED"
-  | "WAITING"
-  | "DONE"
-  | "CANCELLED"
 
 export type TaskPriority =
   | "P1"
@@ -38,8 +32,8 @@ export type Task = {
   updated_at: string
 
   attachments: {
-  id: number
-  file: string
-  original_name: string
+    id: number
+    file: string
+    original_name: string
   }[]
 }

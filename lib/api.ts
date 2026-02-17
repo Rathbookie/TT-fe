@@ -83,15 +83,24 @@ export const apiFetchJson = async <T = any>(
 ): Promise<T> => {
   const res = await apiFetch(endpoint, options)
 
+  const contentType = res.headers.get("content-type")
+
   if (!res.ok) {
-    console.error("API ERROR:", res.status)
     const text = await res.text()
+    console.error("API ERROR:", res.status)
     console.error("Response body:", text)
     throw new Error("API error")
   }
 
+  if (!contentType?.includes("application/json")) {
+    const text = await res.text()
+    console.error("Expected JSON but received:", text)
+    throw new Error("Invalid JSON response")
+  }
+
   return res.json()
 }
+
 
 export const getTasks = async () => {
   const res = await apiFetch("/api/tasks/")
