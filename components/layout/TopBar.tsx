@@ -1,9 +1,12 @@
 "use client"
 
+import { Role } from "@/lib/statusConfig"
+
+
 interface Props {
-  activeRole?: string | null
-  roles?: string[]
-  setActiveRole: (role: string) => void
+  activeRole: Role
+  roles: Role[]
+  setActiveRole: (role: Role) => void
   toggleDrawer: () => void
   openCreateTask: () => void
 }
@@ -26,7 +29,7 @@ export default function TopBar({
           <select
             className="border rounded-lg px-3 py-2 text-sm"
             value={activeRole ?? ""}
-            onChange={(e) => setActiveRole(e.target.value)}
+            onChange={(e) => setActiveRole(e.target.value as Role)}
           >
             {roles.includes("TASK_RECEIVER") && (
               <option value="TASK_RECEIVER">

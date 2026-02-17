@@ -10,6 +10,7 @@ type Props = {
   setSelectedStatus: (status: TaskStatus) => void
   blockedReason: string
   setBlockedReason: (value: string) => void
+  mode?: "full" | "compact"
 }
 
 export default function TaskWorkflow({
@@ -19,7 +20,10 @@ export default function TaskWorkflow({
   setSelectedStatus,
   blockedReason,
   setBlockedReason,
+  mode = "full",
 }: Props) {
+  const isCompact = mode === "compact"
+
   const isTerminal =
     task.status === "DONE" || task.status === "CANCELLED"
 
@@ -27,7 +31,7 @@ export default function TaskWorkflow({
     allowedTransitions[activeRole]?.[task.status] ?? []
 
   return (
-    <div className="space-y-4">
+    <div className={isCompact ? "space-y-3" : "space-y-4"}>
       {/* Status Display */}
       <div className="text-sm font-medium text-neutral-500">
         Status:{" "}
@@ -38,12 +42,14 @@ export default function TaskWorkflow({
 
       {/* Transition Buttons */}
       {!isTerminal && transitions.length > 0 && (
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
           {transitions.map((nextStatus) => (
             <button
               key={nextStatus}
               onClick={() => setSelectedStatus(nextStatus)}
-              className={`px-4 py-2 text-sm rounded-xl font-medium transition
+              className={`
+                ${isCompact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}
+                rounded-xl font-medium transition
                 ${selectedStatus === nextStatus ? "ring-2 ring-black" : ""}
                 ${
                   nextStatus === "DONE"
@@ -57,10 +63,11 @@ export default function TaskWorkflow({
                     : nextStatus === "CANCELLED"
                     ? "bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200"
                     : ""
-                }`}
+                }
+              `}
             >
               {nextStatus === "WAITING"
-                ? "SUBMIT FOR APPROVAL"
+                ? "SUBMIT"
                 : nextStatus === "DONE"
                 ? "APPROVE"
                 : nextStatus === "IN_PROGRESS"
@@ -80,7 +87,7 @@ export default function TaskWorkflow({
           <textarea
             value={blockedReason}
             onChange={(e) => setBlockedReason(e.target.value)}
-            rows={3}
+            rows={isCompact ? 2 : 3}
             className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
           />
         </div>

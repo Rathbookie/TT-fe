@@ -100,6 +100,10 @@ export default function DashboardPage() {
                     setSelectedTask(null)
                     setFullViewTask(fullTask)
                   }}
+                  onTaskUpdated={(updatedTask) => {
+                    updateTaskInState(updatedTask)   // 🔥 critical
+                    setSelectedTask(updatedTask)     // keep drawer in sync
+                  }}
                 />
               </div>
             )}
