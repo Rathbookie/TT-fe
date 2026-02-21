@@ -12,6 +12,15 @@ export type TaskPriority =
   | "P3"
   | "P4"
 
+export type TaskAttachment = {
+  id: number
+  file: string
+  original_name: string
+  uploaded_by: number
+  type: "REQUIREMENT" | "SUBMISSION"
+}
+
+
 export type Task = {
   id: number
   title: string
@@ -31,9 +40,7 @@ export type Task = {
   created_at: string
   updated_at: string
 
-  attachments: {
-    id: number
-    file: string
-    original_name: string
-  }[]
+  attachments: TaskAttachment[]
 }
+
+

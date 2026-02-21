@@ -13,7 +13,7 @@ export default function Badge({ variant, value }: Props) {
       NOT_STARTED: "bg-neutral-200 text-neutral-700",
       IN_PROGRESS: "bg-blue-100 text-blue-700",
       BLOCKED: "bg-red-100 text-red-700",
-      WAITING: "bg-yellow-100 text-yellow-700",
+      WAITING_REVIEW: "bg-yellow-100 text-yellow-700",
       DONE: "bg-green-100 text-green-700",
       CANCELLED: "bg-neutral-300 text-neutral-600",
     }

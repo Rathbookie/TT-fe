@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react"
 import { apiFetchJson } from "@/lib/api"
 import { useAuth } from "@/context/AuthContext"
+import { Task } from "@/types/task"
 
 export function useTasks() {
   const { activeRole } = useAuth()
 
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTask, setSelectedTask] = useState<any | null>(null)
-  const [fullViewTask, setFullViewTask] = useState<any | null>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [fullViewTask, setFullViewTask] = useState<Task | null>(null)
 
   // ✅ Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -66,6 +67,10 @@ export function useTasks() {
       prev.map(t =>
         t.id === updatedTask.id ? updatedTask : t
       )
+    )
+
+    setSelectedTask(prev =>
+      prev?.id === updatedTask.id ? updatedTask : prev
     )
   }
 

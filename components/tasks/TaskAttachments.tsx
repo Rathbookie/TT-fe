@@ -107,6 +107,40 @@ export default function TaskAttachments({
         </div>
       )}
 
+      {/* Upload Pending Files */}
+      {!isCreate && !isTerminal && files.length > 0 && taskId && (
+        <button
+          type="button"
+          onClick={async () => {
+            for (const file of files) {
+              const formData = new FormData()
+              formData.append("file", file)
+
+              const res = await apiFetch(
+                `/api/tasks/${taskId}/attachments/`,
+                {
+                  method: "POST",
+                  body: formData,
+                }
+              )
+
+              if (res.ok) {
+                const data = await res.json()
+                setExistingAttachments((prev) => [
+                  ...prev,
+                  data,
+                ])
+              }
+            }
+
+            setFiles([])
+          }}
+          className="px-3 py-1 text-sm bg-black text-white rounded-md"
+        >
+          Upload Files
+        </button>
+      )}
+
       {/* Add Files */}
       {!isTerminal && (
         <label className="text-blue-600 underline cursor-pointer text-sm">

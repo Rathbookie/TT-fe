@@ -11,7 +11,7 @@ export const STATUS_CONFIG = {
     label: "Blocked",
     color: "bg-red-50 text-red-600",
   },
-  WAITING: {
+  WAITING_REVIEW: {
     label: "Waiting Approval",
     color: "bg-amber-50 text-amber-600",
   },
@@ -38,25 +38,25 @@ export const allowedTransitions: Record<
 > = {
   TASK_RECEIVER: {
     NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
-    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING_REVIEW", "CANCELLED"],
     BLOCKED: ["IN_PROGRESS", "CANCELLED"],
-    WAITING: [],
+    WAITING_REVIEW: [],
     DONE: [],
     CANCELLED: [],
   },
   TASK_CREATOR: {
     NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
-    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING_REVIEW", "CANCELLED"],
     BLOCKED: ["IN_PROGRESS", "CANCELLED"],
-    WAITING: ["DONE", "IN_PROGRESS", "CANCELLED"],
+    WAITING_REVIEW: ["DONE", "IN_PROGRESS", "CANCELLED"],
     DONE: [],
     CANCELLED: [],
   },
   ADMIN: {
     NOT_STARTED: ["IN_PROGRESS", "CANCELLED"],
-    IN_PROGRESS: ["BLOCKED", "WAITING", "CANCELLED"],
+    IN_PROGRESS: ["BLOCKED", "WAITING_REVIEW", "CANCELLED"],
     BLOCKED: ["IN_PROGRESS", "CANCELLED"],
-    WAITING: ["DONE", "IN_PROGRESS", "CANCELLED"],
+    WAITING_REVIEW: ["DONE", "IN_PROGRESS", "CANCELLED"],
     DONE: ["IN_PROGRESS", "CANCELLED"],
     CANCELLED: [],
   },

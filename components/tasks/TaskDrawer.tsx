@@ -6,13 +6,17 @@ import { useAuth } from "@/context/AuthContext"
 import TaskWorkflow from "./TaskWorkflow"
 import { TaskStatus } from "@/lib/statusConfig"
 import TaskAttachmentsPreview from "./TaskAttachmentsPreview"
+import ReceiverProgressUpload from "./ReceiverProgressUpload"
 import Badge from "@/components/ui/Badge"
+import { Task } from "@/types/task"
+import CreatorSubmissionView from "./CreatorSubmissionView"
 
 interface Props {
-  task: any
+  task: Task
   onClose: () => void
   onEdit: (taskId: number) => void
   onTaskUpdated?: (updatedTask: any) => void // made optional
+  updateTaskInState: (updatedTask: any) => void
 }
 
 export default function TaskDrawer({
@@ -20,14 +24,17 @@ export default function TaskDrawer({
   onClose,
   onEdit,
   onTaskUpdated,
+  updateTaskInState,
 }: Props) {
   const { activeRole } = useAuth()
+  console.log("Active Role:", activeRole)
 
   const [history, setHistory] = useState<any[]>([])
   const [selectedStatus, setSelectedStatus] =
     useState<TaskStatus | null>(null)
   const [blockedReason, setBlockedReason] = useState("")
   const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
 
   if (!task) return null
   if (!activeRole) return null
@@ -80,6 +87,7 @@ export default function TaskDrawer({
   /* ----------------- */
 
   const handleSaveStatus = async () => {
+    console.log("Active Role:", activeRole)
     if (!selectedStatus) return
 
     if (
@@ -156,7 +164,7 @@ export default function TaskDrawer({
 
           <div className="flex gap-2 mt-3 flex-wrap">
             <Badge variant="status" value={task.status} />
-            <Badge variant="priority" value={task.priority} />
+            <Badge variant="priority" value={task.priority ?? "P3"} />
           </div>
         </div>
 
@@ -209,20 +217,40 @@ export default function TaskDrawer({
 
         {/* ATTACHMENTS */}
         <TaskAttachmentsPreview
-          attachments={task.attachments || []}
+          attachments={task.attachments.filter(
+            (a) => a.type === "REQUIREMENT"
+          )}
         />
+
+        {activeRole === "TASK_RECEIVER" &&
+          task.status === "IN_PROGRESS" && (
+            <ReceiverProgressUpload
+              task={task}
+              onStatusChange={(updatedTask) => {
+                updateTaskInState(updatedTask)
+              }}
+            />
+        )}
+
+        {activeRole === "TASK_CREATOR" && (
+          <CreatorSubmissionView task={task} />
+        )}
+
         {/* EDIT BUTTON */}
-        <button
-          onClick={() => onEdit(task.id)}
-          disabled={task.status === "DONE"}
-          className={`w-full py-2.5 rounded-xl text-sm font-medium transition ${
-            task.status === "DONE"
-              ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-              : "bg-black text-white hover:bg-neutral-900"
-          }`}
-        >
-          Edit Task
-        </button>
+        {activeRole !== "TASK_RECEIVER" && (
+          <button
+            onClick={() => onEdit(task.id)}
+            disabled={task.status === "DONE"}
+            className={`w-full py-2.5 rounded-xl text-sm font-medium transition ${
+              task.status === "DONE"
+                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                : "bg-black text-white hover:bg-neutral-900"
+            }`}
+          >
+            Edit Task
+          </button>
+        )}
+
         {/* METADATA */}
         <div className="bg-neutral-50 rounded-lg p-6 space-y-4">
           <p className="text-xs uppercase tracking-wide text-neutral-500">

@@ -9,7 +9,7 @@ import TaskTable from "@/components/tasks/TaskTable"
 import { apiFetchJson } from "@/lib/api"
 
 export default function DashboardPage() {
-  const { roles, activeRole, setActiveRole } = useAuth()
+  const { activeRole } = useAuth()
 
   const {
     tasks,
@@ -19,7 +19,6 @@ export default function DashboardPage() {
     fullViewTask,
     setFullViewTask,
     toggleDrawer,
-    toggleDrawerFromTopBar,
     updateTaskInState,
     currentPage,
     totalPages,
@@ -47,11 +46,14 @@ export default function DashboardPage() {
   return (
     <>
       <TopBar
-        activeRole={activeRole}
-        roles={roles}
-        setActiveRole={setActiveRole}
-        toggleDrawer={toggleDrawerFromTopBar}
-        openCreateTask={openCreateTask}
+        onCreateTask={openCreateTask}
+        onToggleDrawer={() => {
+          if (selectedTask) {
+            setSelectedTask(null)
+          } else if (tasks.length > 0) {
+            setSelectedTask(tasks[0])
+          }
+        }}
       />
 
       <div className="flex flex-1 gap-6 mt-6 overflow-hidden">
@@ -92,6 +94,7 @@ export default function DashboardPage() {
               <div className="w-[420px] flex-shrink-0">
                 <TaskDrawer
                   task={selectedTask}
+                  updateTaskInState={updateTaskInState}
                   onClose={() => setSelectedTask(null)}
                   onEdit={async (taskId) => {
                     const fullTask = await apiFetchJson(
@@ -101,8 +104,8 @@ export default function DashboardPage() {
                     setFullViewTask(fullTask)
                   }}
                   onTaskUpdated={(updatedTask) => {
-                    updateTaskInState(updatedTask)   // 🔥 critical
-                    setSelectedTask(updatedTask)     // keep drawer in sync
+                    updateTaskInState(updatedTask)
+                    setSelectedTask(updatedTask)
                   }}
                 />
               </div>

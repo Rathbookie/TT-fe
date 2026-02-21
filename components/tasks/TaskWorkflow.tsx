@@ -35,7 +35,7 @@ export default function TaskWorkflow({
       {/* Status Display */}
       <div className="text-sm font-medium text-neutral-500">
         Status:{" "}
-        {task.status === "WAITING"
+        {task.status === "WAITING_REVIEW"
           ? "Waiting Approval"
           : task.status.replace("_", " ")}
       </div>
@@ -54,7 +54,7 @@ export default function TaskWorkflow({
                 ${
                   nextStatus === "DONE"
                     ? "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
-                    : nextStatus === "WAITING"
+                    : nextStatus === "WAITING_REVIEW"
                     ? "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100"
                     : nextStatus === "IN_PROGRESS"
                     ? "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100"
@@ -66,7 +66,7 @@ export default function TaskWorkflow({
                 }
               `}
             >
-              {nextStatus === "WAITING"
+              {nextStatus === "WAITING_REVIEW"
                 ? "SUBMIT"
                 : nextStatus === "DONE"
                 ? "APPROVE"

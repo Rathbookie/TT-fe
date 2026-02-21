@@ -1,75 +1,53 @@
 "use client"
 
-import { Role } from "@/lib/statusConfig"
+import { Plus } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
+import { canCreateTask } from "@/lib/roleCapabilities"
 
-
-interface Props {
-  activeRole: Role
-  roles: Role[]
-  setActiveRole: (role: Role) => void
-  toggleDrawer: () => void
-  openCreateTask: () => void
+type Props = {
+  onCreateTask?: () => void
+  onToggleDrawer?: () => void
 }
 
-export default function TopBar({
-  activeRole,
-  roles = [],
-  setActiveRole,
-  toggleDrawer,
-  openCreateTask,
-}: Props) {
+export default function TopBar({ onCreateTask, onToggleDrawer }: Props) {
+  const { activeRole } = useAuth()
 
   return (
-    <div className="bg-white rounded-lg border p-4 flex justify-between items-center">
+    <div className="bg-white border border-neutral-200 rounded-lg px-3 py-3">
+      <div className="flex items-center justify-between">
 
-      {/* LEFT SIDE — ROLE SWITCH */}
-      <div className="flex items-center gap-4">
+        {/* Left */}
+        <div className="flex items-center gap-4">
+          <div className="text-lg font-semibold">
+            Dashboard
+          </div>
 
-        {roles.length > 1 && (
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={activeRole ?? ""}
-            onChange={(e) => setActiveRole(e.target.value as Role)}
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            className="w-64 px-4 py-2 text-sm rounded-lg bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-300 transition"
+          />
+        </div>
+
+        {/* Right */}
+        <div className="flex items-center gap-3">
+          {canCreateTask(activeRole) && (
+            <button
+              onClick={onCreateTask}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black text-white rounded-lg hover:opacity-90 transition"
+            >
+              <Plus size={16} />
+              Create Task
+            </button>
+          )}
+
+          <button
+            onClick={onToggleDrawer}
+            className="px-4 py-2 text-sm font-medium bg-neutral-200 rounded-lg hover:bg-neutral-300 transition"
           >
-            {roles.includes("TASK_RECEIVER") && (
-              <option value="TASK_RECEIVER">
-                Tasks Received
-              </option>
-            )}
-
-            {roles.includes("TASK_CREATOR") && (
-              <option value="TASK_CREATOR">
-                Tasks Given
-              </option>
-            )}
-
-            {roles.includes("ADMIN") && (
-              <option value="ADMIN">
-                Admin View
-              </option>
-            )}
-          </select>
-        )}
-
-      </div>
-
-      {/* RIGHT SIDE — ACTIONS */}
-      <div className="flex gap-3 items-center">
-
-        <button
-          className="px-4 py-2 rounded-lg border text-sm"
-          onClick={openCreateTask}
-        >
-          Add Task
-        </button>
-
-        <button
-          className="px-4 py-2 rounded-lg border text-sm"
-          onClick={toggleDrawer}
-        >
-          Drawer
-        </button>
-
+            DRAWER
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -1,27 +1,28 @@
 "use client"
 
-import { useState } from "react"
 import { MoreVertical, Home, CheckSquare, Settings } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
+import clsx from "clsx"
+import { useState,} from "react"
+import RoleDropdown from "./RoleDropdown"
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const { activeRole, setActiveRole, roles } = useAuth()
 
   return (
     <aside
-      className={`
-        ${collapsed ? "w-24" : "w-72"}
-        transition-all duration-300
-        bg-neutral-100
-        rounded-lg
-        p-6
-        flex flex-col
-      `}
+      className={clsx(
+        "transition-all duration-300 bg-neutral-100 rounded-lg p-6 flex flex-col",
+        collapsed ? "w-24" : "w-72"
+      )}
     >
       {/* Top */}
       <div
-        className={`flex items-center ${
+        className={clsx(
+          "flex items-center mb-8",
           collapsed ? "justify-center" : "justify-between"
-        } mb-8`}
+        )}
       >
         {!collapsed && (
           <div className="h-10 w-32 bg-black rounded-lg" />
@@ -51,12 +52,25 @@ export default function Sidebar() {
         />
       </div>
 
+      <div className="mt-8 pt-6 border-t border-neutral-300">
+        {activeRole && (
+          <RoleDropdown
+            roles={roles}
+            activeRole={activeRole}
+            setActiveRole={setActiveRole}
+            collapsed={collapsed}
+          />
+        )}
+      </div>
+
+
       {/* Profile */}
       <div className="mt-auto pt-8 border-t border-neutral-300">
         <div
-          className={`flex items-center ${
+          className={clsx(
+            "flex items-center",
             collapsed ? "justify-center" : "gap-3"
-          }`}
+          )}
         >
           <div className="h-12 w-12 bg-neutral-300 rounded-full" />
           {!collapsed && (
@@ -79,17 +93,27 @@ function MenuItem({
 }: any) {
   return (
     <div
-      className={`
-        flex items-center
-        ${collapsed ? "justify-center" : "gap-4"}
-        px-4 py-3 rounded-lg cursor-pointer
-        ${active ? "bg-neutral-200" : "hover:bg-neutral-200"}
-      `}
+      className={clsx(
+        "flex items-center px-4 py-3 rounded-lg cursor-pointer",
+        collapsed ? "justify-center" : "gap-4",
+        active ? "bg-neutral-200" : "hover:bg-neutral-200"
+      )}
     >
       {icon}
-      {!collapsed && (
-        <span className="font-medium">{label}</span>
-      )}
+      {!collapsed && <span className="font-medium">{label}</span>}
     </div>
   )
+}
+
+function formatRole(role: string) {
+  switch (role) {
+    case "TASK_RECEIVER":
+      return "Receiver"
+    case "TASK_CREATOR":
+      return "Creator"
+    case "ADMIN":
+      return "Admin"
+    default:
+      return role
+  }
 }

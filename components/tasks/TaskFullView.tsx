@@ -87,6 +87,30 @@ export default function TaskFullView({
     }
   }
 
+  // -----------------------------
+// DIRTY STATE DETECTION
+// -----------------------------
+
+const original = task
+
+const hasChanges = isCreate
+  ? title.trim() !== "" ||
+    description.trim() !== "" ||
+    priority !== "" ||
+    assignedToId !== null ||
+    dueDate !== "" ||
+    files.length > 0
+  : (
+      title !== original?.title ||
+      description !== original?.description ||
+      priority !== original?.priority ||
+      assignedToId !== original?.assigned_to?.id ||
+      dueDate !== original?.due_date?.slice(0, 10) ||
+      dueTime !== original?.due_date?.slice(11, 16) ||
+      selectedStatus !== null ||
+      files.length > 0
+    )
+
   // 💾 Save
   const handleSave = async () => {
     if (!title || !priority || !assignedToId || !dueDate) {
@@ -169,19 +193,43 @@ export default function TaskFullView({
         console.log("VERSION SENT:", task?.version)
         console.log("SELECTED STATUS:", selectedStatus)
 
-        const res = await apiFetch(`/api/tasks/${task?.id}/`, {
-          method: "PATCH",
-          body: formData,
-        })
-        if (!res.ok) {
-          const errData = await res.json()
-          console.error("SAVE FAILED → STATUS:", res.status)
-          console.error("SAVE FAILED → BODY:", errData)
-          return
-        }
-        savedTask = await res.json()
 
-                if (files.length > 0) {
+        const noFieldChanges =
+          !selectedStatus &&
+          title === task?.title &&
+          description === task?.description &&
+          priority === task?.priority &&
+          dueDate === task?.due_date?.slice(0, 10) &&
+          assignedToId === task?.assigned_to?.id &&
+          dueTime === task?.due_date?.slice(11, 16)
+
+        const attachmentsOnly =
+          files.length > 0 && noFieldChanges
+
+        if (noFieldChanges && files.length === 0) {
+          savedTask = task
+        } else if (attachmentsOnly) {
+          savedTask = await apiFetchJson(
+            `/api/tasks/${task!.id}/`
+          )
+        } else {
+          const res = await apiFetch(`/api/tasks/${task?.id}/`, {
+            method: "PATCH",
+            body: formData,
+          })
+
+          if (!res.ok) {
+            const errData = await res.json()
+            console.error("SAVE FAILED → STATUS:", res.status)
+            console.error("SAVE FAILED → BODY:", errData)
+            return
+          }
+
+          savedTask = await res.json()
+        }
+
+        // Upload attachments separately
+        if (files.length > 0) {
           for (const file of files) {
             const uploadForm = new FormData()
             uploadForm.append("file", file)
@@ -201,6 +249,7 @@ export default function TaskFullView({
           }
         }
       }
+
 
       const refreshed = await apiFetchJson(
         `/api/tasks/${savedTask.id}/`
@@ -224,13 +273,22 @@ export default function TaskFullView({
     <div className="flex-1 overflow-y-auto bg-white rounded-3xl p-10 space-y-8">
 
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-semibold text-neutral-900">
-          {isCreate ? "Create New Task" : "Edit Task"}
-        </h2>
-        <p className="text-neutral-500 mt-1">
-          Fill in the details below to {isCreate ? "create" : "update"} a task
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-neutral-900">
+            {isCreate ? "Create New Task" : "Edit Task"}
+          </h2>
+          <p className="text-neutral-500 mt-1">
+            Fill in the details below to {isCreate ? "create" : "update"} a task
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="text-neutral-400 hover:text-neutral-900 text-xl"
+        >
+          ×
+        </button>
       </div>
 
 
@@ -265,39 +323,41 @@ export default function TaskFullView({
           setFiles={setFiles}
         />
 
-        <TaskMetaFields
-          isTerminal={isTerminal}
-          priority={priority}
-          setPriority={setPriority}
-          dueDate={dueDate}
-          setDueDate={setDueDate}
-          dueTime={dueTime}
-          setDueTime={setDueTime}
-          assignedToId={assignedToId}
-          setAssignedToId={setAssignedToId}
-        />
+            <TaskMetaFields
+              isTerminal={isTerminal}
+              priority={priority}
+              setPriority={setPriority}
+              dueDate={dueDate}
+              setDueDate={setDueDate}
+              dueTime={dueTime}
+              setDueTime={setDueTime}
+              assignedToId={assignedToId}
+              setAssignedToId={setAssignedToId}
+            />
 
       {/* Actions */}
-      <div className="flex justify-end gap-4">
-        <button
-          onClick={onClose}
-          className="px-6 py-2 rounded-xl border border-neutral-300 text-sm"
-        >
-          Cancel
-        </button>
+      {hasChanges && (
+        <div className="flex justify-end gap-4">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 rounded-xl border border-neutral-300 text-sm"
+          >
+            Cancel
+          </button>
 
-        <button
-          disabled={loading || isTerminal}
-          onClick={handleSave}
-          className={`px-6 py-2 rounded-xl text-sm text-white ${
-            loading || isTerminal
-              ? "bg-neutral-400"
-              : "bg-black hover:bg-neutral-800"
-          }`}
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
-      </div>
+          <button
+            disabled={loading || isTerminal}
+            onClick={handleSave}
+            className={`px-6 py-2 rounded-xl text-sm text-white ${
+              loading || isTerminal
+                ? "bg-neutral-400"
+                : "bg-black hover:bg-neutral-800"
+            }`}
+          >
+            {loading ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      )}
     </div>
   </div>
   )

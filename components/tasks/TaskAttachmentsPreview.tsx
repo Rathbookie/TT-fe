@@ -21,7 +21,7 @@ export default function TaskAttachmentsPreview({
 
       {attachments.length === 0 && (
         <p className="text-sm text-neutral-400">
-          No attachments
+          Provided Attachments
         </p>
       )}
 
