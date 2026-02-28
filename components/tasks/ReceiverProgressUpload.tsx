@@ -2,32 +2,22 @@
 
 import { useState } from "react"
 import { apiFetch } from "@/lib/api"
-import { useAuth } from "@/context/AuthContext"
-import { Task, TaskAttachment } from "@/types/task"
-
-type Attachment = {
-  id: number
-  file: string
-  original_name: string
-  uploaded_by: number
-}
+import { Task } from "@/types/task"
 
 type Props = {
   task: Task
-  onStatusChange: (updatedTask: any) => void
+  onStatusChange: (updatedTask: Task) => void
 }
 
 export default function ReceiverProgressUpload({
   task,
   onStatusChange,
 }: Props) {
-  const { user } = useAuth()
   const [files, setFiles] = useState<File[]>([])
   const existing = task.attachments.filter(
     (a) => a.type === "SUBMISSION"
   )
   const [loading, setLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   
 
   async function uploadFiles() {
@@ -63,28 +53,6 @@ export default function ReceiverProgressUpload({
 
     setFiles([])
     setLoading(false)
-  }
-
-  async function submitForReview() {
-    setSubmitting(true)
-
-    const res = await apiFetch(
-      `/api/tasks/${task.id}/`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: "WAITING_REVIEW",
-          version: task.version,
-        }),
-      }
-    )
-
-    if (res.ok) {
-      const updatedTask = await res.json()
-      onStatusChange(updatedTask)
-    }
-
-    setSubmitting(false)
   }
 
   return (

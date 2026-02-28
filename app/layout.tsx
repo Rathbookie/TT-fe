@@ -1,5 +1,13 @@
 import "./globals.css"
+import "react-grid-layout/css/styles.css"
+import "react-resizable/css/styles.css"
 import { AuthProvider } from "@/context/AuthContext"
+import { Inter } from "next/font/google"
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+})
 
 export default function RootLayout({
   children,
@@ -8,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-neutral-200">
+      <body className={`${inter.variable} bg-neutral-100`}>
         <AuthProvider>
           {children}
         </AuthProvider>

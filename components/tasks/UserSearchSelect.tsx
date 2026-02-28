@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { apiFetchJson } from "@/lib/api"
+import { UserProjection } from "@/types/task"
 
 type Props = {
   disabled?: boolean
@@ -11,11 +12,11 @@ type Props = {
 
 export default function UserSearchSelect({
   disabled,
-  assignedToId,
+  assignedToId: _assignedToId,
   setAssignedToId,
 }: Props) {
   const [search, setSearch] = useState("")
-  const [results, setResults] = useState<any[]>([])
+  const [results, setResults] = useState<UserProjection[]>([])
   const [open, setOpen] = useState(false)
 
   const fetchUsers = async (q: string) => {
@@ -26,11 +27,11 @@ export default function UserSearchSelect({
     }
 
     try {
-        const data = await apiFetchJson<any[]>(
+      const data = await apiFetchJson<UserProjection[] | { results?: UserProjection[] }>(
         `/api/users/?search=${encodeURIComponent(q)}`
-        )
+      )
 
-      setResults(data || [])
+      setResults(Array.isArray(data) ? data : (data.results || []))
       setOpen(true)
     } catch (err) {
       console.error(err)
@@ -50,7 +51,7 @@ export default function UserSearchSelect({
 
   return (
     <div className="space-y-2 relative">
-      <label className="text-sm font-medium">
+      <label className="text-xs font-medium">
         Assign To *
       </label>
 
@@ -59,11 +60,11 @@ export default function UserSearchSelect({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search for user"
-        className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+        className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
       />
 
       {open && results.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-neutral-200 rounded-xl shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-neutral-200 rounded-lg shadow-lg max-h-56 overflow-auto">
           {results.map((u) => (
             <div
               key={u.id}
@@ -73,7 +74,7 @@ export default function UserSearchSelect({
                 setOpen(false)
                 setResults([])
               }}
-              className="px-4 py-2 hover:bg-neutral-100 cursor-pointer text-sm"
+              className="px-3 py-1.5 hover:bg-neutral-100 cursor-pointer text-xs"
             >
               <div className="font-medium text-neutral-800">
                 {u.full_name}

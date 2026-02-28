@@ -4,6 +4,8 @@ import TaskTable from "@/components/tasks/TaskTable"
 import TaskDrawer from "@/components/tasks/TaskDrawer"
 import TaskFullView from "@/components/tasks/TaskFullView"
 import { useTasks } from "./useTasks"
+import { apiFetchJson } from "@/lib/api"
+import { Task } from "@/types/task"
 
 export default function CreatorDashboard() {
   const {
@@ -15,6 +17,10 @@ export default function CreatorDashboard() {
     setFullViewTask,
     toggleDrawer,
     updateTaskInState,
+    currentPage,
+    totalPages,
+    count,
+    setCurrentPage,
   } = useTasks()
 
   return (
@@ -31,8 +37,9 @@ export default function CreatorDashboard() {
         {fullViewTask ? (
           <TaskFullView
             task={fullViewTask}
+            mode={fullViewTask.id ? "edit" : "create"}
             onClose={() => setFullViewTask(null)}
-            onUpdate={(updatedTask) => {
+            onSaved={(updatedTask) => {
               updateTaskInState(updatedTask)
               setFullViewTask(updatedTask)
             }}
@@ -45,6 +52,10 @@ export default function CreatorDashboard() {
                 loading={loading}
                 role="TASK_CREATOR"
                 assignmentColumn="Assigned To"
+                currentPage={currentPage}
+                totalPages={totalPages}
+                count={count}
+                onPageChange={setCurrentPage}
                 onClickTask={toggleDrawer}
                 onDoubleClickTask={setFullViewTask}
               />
@@ -54,7 +65,19 @@ export default function CreatorDashboard() {
               <div className="w-[420px] flex-shrink-0">
                 <TaskDrawer
                   task={selectedTask}
+                  updateTaskInState={updateTaskInState}
                   onClose={() => setSelectedTask(null)}
+                  onEdit={async (taskId) => {
+                    const fullTask = await apiFetchJson<Task>(
+                      `/api/tasks/${taskId}/`
+                    )
+                    setSelectedTask(null)
+                    setFullViewTask(fullTask)
+                  }}
+                  onTaskUpdated={(updatedTask) => {
+                    updateTaskInState(updatedTask)
+                    setSelectedTask(updatedTask)
+                  }}
                 />
               </div>
             )}

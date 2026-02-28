@@ -1,20 +1,15 @@
 "use client"
 
 import { apiFetch } from "@/lib/api"
-
-type Attachment = {
-  id: number
-  file: string
-  original_name: string
-}
+import { TaskAttachment } from "@/types/task"
 
 type Props = {
   taskId?: number
   isCreate: boolean
   isTerminal: boolean
-  existingAttachments: Attachment[]
+  existingAttachments: TaskAttachment[]
   setExistingAttachments: React.Dispatch<
-    React.SetStateAction<Attachment[]>
+    React.SetStateAction<TaskAttachment[]>
   >
   files: File[]
   setFiles: React.Dispatch<React.SetStateAction<File[]>>
@@ -125,7 +120,7 @@ export default function TaskAttachments({
               )
 
               if (res.ok) {
-                const data = await res.json()
+                const data = (await res.json()) as TaskAttachment
                 setExistingAttachments((prev) => [
                   ...prev,
                   data,

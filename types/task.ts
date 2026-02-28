@@ -20,6 +20,19 @@ export type TaskAttachment = {
   type: "REQUIREMENT" | "SUBMISSION"
 }
 
+export type WorkflowProjection = {
+  id: number
+  name: string
+  is_default: boolean
+}
+
+export type WorkflowStageProjection = {
+  id: number
+  name: string
+  order: number
+  is_terminal: boolean
+}
+
 
 export type Task = {
   id: number
@@ -27,6 +40,8 @@ export type Task = {
   description: string
 
   status: TaskStatus
+  workflow?: WorkflowProjection | null
+  stage?: WorkflowStageProjection | null
   priority?: TaskPriority | null
 
   due_date?: string | null
@@ -42,5 +57,4 @@ export type Task = {
 
   attachments: TaskAttachment[]
 }
-
 

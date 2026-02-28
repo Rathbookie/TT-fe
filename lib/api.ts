@@ -1,5 +1,10 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
+const normalizeRoleHeader = (role: string | null) => {
+  if (!role) return null
+  return role.trim().toUpperCase().replaceAll(" ", "_")
+}
+
 export const setTokens = (access: string, refresh: string): void => {
   localStorage.setItem("access", access)
   localStorage.setItem("refresh", refresh)
@@ -45,13 +50,14 @@ export const apiFetch = async (
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> => {
-  let access = getAccessToken()
+  const access = getAccessToken()
 
   const makeRequest = async (token: string | null) => {
     const activeRole =
       typeof window !== "undefined"
         ? localStorage.getItem("activeRole")
         : null
+    const normalizedActiveRole = normalizeRoleHeader(activeRole)
 
     return fetch(`${BASE_URL}${endpoint}`, {
       ...options,
@@ -60,7 +66,7 @@ export const apiFetch = async (
           ? {}
           : { "Content-Type": "application/json" }),
         ...(token && { Authorization: `Bearer ${token}` }),
-        ...(activeRole && { "X-Active-Role": activeRole }),
+        ...(normalizedActiveRole && { "X-Active-Role": normalizedActiveRole }),
         ...options.headers,
       },
     })
@@ -77,7 +83,7 @@ export const apiFetch = async (
   return res
 }
 
-export const apiFetchJson = async <T = any>(
+export const apiFetchJson = async <T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> => {
@@ -89,7 +95,14 @@ export const apiFetchJson = async <T = any>(
     const text = await res.text()
     console.error("API ERROR:", res.status)
     console.error("Response body:", text)
-    throw new Error("API error")
+    let detail = text
+    try {
+      const parsed = JSON.parse(text) as { detail?: string; error?: string }
+      detail = parsed.detail || parsed.error || text
+    } catch {
+      // keep raw text
+    }
+    throw new Error(`API ${res.status}: ${detail || "Request failed"}`)
   }
 
   if (!contentType?.includes("application/json")) {

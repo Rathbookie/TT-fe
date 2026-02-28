@@ -6,16 +6,15 @@ import TaskTitleDescription from "./TaskTitleDescription"
 import TaskMetaFields from "./TaskMetaFields"
 
 import { useState } from "react"
-import { Task, TaskPriority } from "@/types/task"
+import { Task, TaskAttachment, TaskPriority } from "@/types/task"
 import { apiFetch, apiFetchJson } from "@/lib/api"
-import { useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { allowedTransitions, Role, TaskStatus } from "@/lib/statusConfig"
+import { Role, TaskStatus } from "@/lib/statusConfig"
 type Props = {
   task?: Task | null
   mode: "create" | "edit"
   onClose: () => void
-  onSaved: (savedTask: any) => void
+  onSaved: (savedTask: Task) => void
 }
 
 export default function TaskFullView({
@@ -28,14 +27,8 @@ export default function TaskFullView({
   const isCreate = mode === "create"
   const { activeRole } = useAuth()
   const isTerminal =
-    task?.status === "DONE" || task?.status === "CANCELLED"
-
-  const transitions =
-    task && activeRole
-      ? allowedTransitions[activeRole as Role]?.[
-          task.status as TaskStatus
-        ] ?? []
-      : []
+    task?.stage?.is_terminal ??
+    (task?.status === "DONE" || task?.status === "CANCELLED")
 
   const [title, setTitle] = useState(task?.title || "")
   const [description, setDescription] = useState(task?.description || "")
@@ -55,37 +48,15 @@ export default function TaskFullView({
     task?.assigned_to?.id || null
   )
 
-  const [userSearch, setUserSearch] = useState("")
-  const [userResults, setUserResults] = useState<any[]>([])
-
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
 
-  const [existingAttachments, setExistingAttachments] = useState<any[]>(task?.attachments || [])
+  const [existingAttachments, setExistingAttachments] = useState<TaskAttachment[]>(task?.attachments || [])
 
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | null>(null)
   const [blockedReason, setBlockedReason] = useState(
     task?.blocked_reason || ""
   )
-
-  // 🔎 User Search
-  const fetchUsers = async (q: string) => {
-    if (!q.trim()) {
-      setUserResults([])
-      return
-    }
-
-    try {
-      const data = await apiFetchJson(
-        `/api/users/?search=${encodeURIComponent(q)}`
-      )
-
-      setUserResults(data.results || [])
-    } catch (err) {
-      console.error(err)
-      setUserResults([])
-    }
-  }
 
   // -----------------------------
 // DIRTY STATE DETECTION
@@ -155,7 +126,7 @@ const hasChanges = isCreate
         formData.append("version", String(task.version))
       }
 
-      let savedTask
+      let savedTask: Task
 
       if (isCreate) {
         const res = await apiFetch("/api/tasks/", {
@@ -167,7 +138,7 @@ const hasChanges = isCreate
           console.error("SAVE FAILED:", errData)
           return
         }
-        savedTask = await res.json()
+        savedTask = (await res.json()) as Task
         // Upload attachments separately
         if (files.length > 0) {
           for (const file of files) {
@@ -209,7 +180,7 @@ const hasChanges = isCreate
         if (noFieldChanges && files.length === 0) {
           savedTask = task
         } else if (attachmentsOnly) {
-          savedTask = await apiFetchJson(
+          savedTask = await apiFetchJson<Task>(
             `/api/tasks/${task!.id}/`
           )
         } else {
@@ -225,7 +196,7 @@ const hasChanges = isCreate
             return
           }
 
-          savedTask = await res.json()
+          savedTask = (await res.json()) as Task
         }
 
         // Upload attachments separately
@@ -251,7 +222,7 @@ const hasChanges = isCreate
       }
 
 
-      const refreshed = await apiFetchJson(
+      const refreshed = await apiFetchJson<Task>(
         `/api/tasks/${savedTask.id}/`
       )
 
@@ -267,25 +238,25 @@ const hasChanges = isCreate
 
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col text-xs">
 
     {/* Scrollable Content */}
-    <div className="flex-1 overflow-y-auto bg-white rounded-3xl p-10 space-y-8">
+    <div className="flex-1 overflow-y-auto bg-white rounded-xl p-5 space-y-4">
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-neutral-900">
-            {isCreate ? "Create New Task" : "Edit Task"}
+          <h2 className="text-lg font-semibold text-neutral-900">
+            {isCreate ? "Task Studio · Create Task" : "Task Studio · Edit Task"}
           </h2>
-          <p className="text-neutral-500 mt-1">
-            Fill in the details below to {isCreate ? "create" : "update"} a task
+          <p className="text-xs text-neutral-500 mt-1">
+            Fill in the execution context, workflow fields, assignment, and delivery artifacts.
           </p>
         </div>
 
         <button
           onClick={onClose}
-          className="text-neutral-400 hover:text-neutral-900 text-xl"
+          className="text-neutral-400 hover:text-neutral-900 text-base"
         >
           ×
         </button>
@@ -304,43 +275,58 @@ const hasChanges = isCreate
         />
       )}
 
-        <TaskTitleDescription
-          isTerminal={isTerminal}
-          title={title}
-          setTitle={setTitle}
-          description={description}
-          setDescription={setDescription}
-        />
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Scope
+          </p>
+          <TaskTitleDescription
+            isTerminal={isTerminal}
+            title={title}
+            setTitle={setTitle}
+            description={description}
+            setDescription={setDescription}
+          />
+        </div>
 
         {/* Attachments */}
-        <TaskAttachments
-          taskId={task?.id}
-          isCreate={isCreate}
-          isTerminal={isTerminal}
-          existingAttachments={existingAttachments}
-          setExistingAttachments={setExistingAttachments}
-          files={files}
-          setFiles={setFiles}
-        />
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Attachments
+          </p>
+          <TaskAttachments
+            taskId={task?.id}
+            isCreate={isCreate}
+            isTerminal={isTerminal}
+            existingAttachments={existingAttachments}
+            setExistingAttachments={setExistingAttachments}
+            files={files}
+            setFiles={setFiles}
+          />
+        </div>
 
-            <TaskMetaFields
-              isTerminal={isTerminal}
-              priority={priority}
-              setPriority={setPriority}
-              dueDate={dueDate}
-              setDueDate={setDueDate}
-              dueTime={dueTime}
-              setDueTime={setDueTime}
-              assignedToId={assignedToId}
-              setAssignedToId={setAssignedToId}
-            />
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Planning
+          </p>
+          <TaskMetaFields
+            isTerminal={isTerminal}
+            priority={priority}
+            setPriority={setPriority}
+            dueDate={dueDate}
+            setDueDate={setDueDate}
+            dueTime={dueTime}
+            setDueTime={setDueTime}
+            assignedToId={assignedToId}
+            setAssignedToId={setAssignedToId}
+          />
+        </div>
 
       {/* Actions */}
       {hasChanges && (
         <div className="flex justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-6 py-2 rounded-xl border border-neutral-300 text-sm"
+            className="px-4 py-1.5 rounded-lg border border-neutral-300 text-xs"
           >
             Cancel
           </button>
@@ -348,7 +334,7 @@ const hasChanges = isCreate
           <button
             disabled={loading || isTerminal}
             onClick={handleSave}
-            className={`px-6 py-2 rounded-xl text-sm text-white ${
+            className={`px-4 py-1.5 rounded-lg text-xs text-white ${
               loading || isTerminal
                 ? "bg-neutral-400"
                 : "bg-black hover:bg-neutral-800"

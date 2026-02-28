@@ -1,6 +1,6 @@
 "use client"
 
-import { TaskPriority } from "@/types/task"
+import { TaskPriority, UserProjection } from "@/types/task"
 import { apiFetchJson } from "@/lib/api"
 import { useState } from "react"
 
@@ -24,11 +24,11 @@ export default function TaskMetaFields({
   setDueDate,
   dueTime,
   setDueTime,
-  assignedToId,
+  assignedToId: _assignedToId,
   setAssignedToId,
 }: Props) {
   const [userSearch, setUserSearch] = useState("")
-  const [userResults, setUserResults] = useState<any[]>([])
+  const [userResults, setUserResults] = useState<UserProjection[]>([])
 
   const fetchUsers = async (q: string) => {
     if (!q.trim()) {
@@ -37,20 +37,20 @@ export default function TaskMetaFields({
     }
 
     try {
-      const data = await apiFetchJson(
+      const data = await apiFetchJson<UserProjection[] | { results?: UserProjection[] }>(
         `/api/users/?search=${encodeURIComponent(q)}`
       )
-      setUserResults(data.results || [])
+      setUserResults(Array.isArray(data) ? data : (data.results || []))
     } catch {
       setUserResults([])
     }
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-2 gap-4">
       {/* Assign To */}
       <div className="space-y-2 relative">
-        <label className="text-sm font-medium">Assign To *</label>
+        <label className="text-xs font-medium">Assign To *</label>
 
         <input
           disabled={isTerminal}
@@ -60,11 +60,11 @@ export default function TaskMetaFields({
             fetchUsers(e.target.value)
           }}
           placeholder="Search for user"
-          className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+          className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
         />
 
         {userResults.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full bg-white border rounded-xl shadow-sm max-h-48 overflow-auto">
+          <div className="absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-sm max-h-48 overflow-auto">
             {userResults.map((u) => (
               <div
                 key={u.id}
@@ -73,7 +73,7 @@ export default function TaskMetaFields({
                   setUserSearch(u.full_name)
                   setUserResults([])
                 }}
-                className="px-4 py-2 hover:bg-neutral-100 cursor-pointer text-sm"
+                className="px-3 py-1.5 hover:bg-neutral-100 cursor-pointer text-xs"
               >
                 {u.full_name}
               </div>
@@ -84,14 +84,14 @@ export default function TaskMetaFields({
 
       {/* Priority */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Priority *</label>
+        <label className="text-xs font-medium">Priority *</label>
         <select
           disabled={isTerminal}
           value={priority}
           onChange={(e) =>
             setPriority(e.target.value as TaskPriority)
           }
-          className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+          className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
         >
           <option value="">Select priority</option>
           <option value="P1">Critical</option>
@@ -103,25 +103,25 @@ export default function TaskMetaFields({
 
       {/* Due Date */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Due Date *</label>
+        <label className="text-xs font-medium">Due Date *</label>
         <input
           disabled={isTerminal}
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+          className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
         />
       </div>
 
       {/* Due Time */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Due Time</label>
+        <label className="text-xs font-medium">Due Time</label>
         <input
           disabled={isTerminal}
           type="time"
           value={dueTime}
           onChange={(e) => setDueTime(e.target.value)}
-          className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+          className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
         />
       </div>
     </div>

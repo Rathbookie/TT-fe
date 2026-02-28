@@ -1,30 +1,23 @@
 "use client"
 
+import { getStatusLabel } from "@/lib/workflowDisplay"
+import { stageTone } from "@/lib/stageTheme"
+
 type Variant = "status" | "priority"
 
 interface Props {
   variant: Variant
   value: string
+  isTerminal?: boolean
 }
 
-export default function Badge({ variant, value }: Props) {
+export default function Badge({ variant, value, isTerminal = false }: Props) {
   if (variant === "status") {
-    const styles: Record<string, string> = {
-      NOT_STARTED: "bg-neutral-200 text-neutral-700",
-      IN_PROGRESS: "bg-blue-100 text-blue-700",
-      BLOCKED: "bg-red-100 text-red-700",
-      WAITING_REVIEW: "bg-yellow-100 text-yellow-700",
-      DONE: "bg-green-100 text-green-700",
-      CANCELLED: "bg-neutral-300 text-neutral-600",
-    }
-
     return (
       <span
-        className={`px-3 py-1 text-xs rounded-full ${
-          styles[value] || "bg-neutral-200"
-        }`}
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${stageTone(value, isTerminal)}`}
       >
-        {value.replace("_", " ")}
+        {getStatusLabel(value)}
       </span>
     )
   }
@@ -46,7 +39,7 @@ export default function Badge({ variant, value }: Props) {
 
     return (
       <span
-        className={`px-3 py-1 text-xs rounded-full ${styles[value]}`}
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${styles[value]}`}
       >
         {labels[value]}
       </span>

@@ -1,7 +1,16 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { Task } from "@/types/task"
-import { allowedTransitions, Role, TaskStatus } from "@/lib/statusConfig"
+import { Role, TaskStatus } from "@/lib/statusConfig"
+import {
+  formatWorkflowLabel,
+  getStatusLabel,
+  stageNameToStatusValue,
+} from "@/lib/workflowDisplay"
+import { apiFetchJson } from "@/lib/api"
+import { stageTone } from "@/lib/stageTheme"
+import { WorkflowDefinition } from "@/types/workflow"
 
 type Props = {
   task: Task
@@ -23,56 +32,87 @@ export default function TaskWorkflow({
   mode = "full",
 }: Props) {
   const isCompact = mode === "compact"
-
+  const [workflow, setWorkflow] = useState<WorkflowDefinition | null>(null)
   const isTerminal =
-    task.status === "DONE" || task.status === "CANCELLED"
+    task.stage?.is_terminal ??
+    (task.status === "DONE" || task.status === "CANCELLED")
 
-  const transitions =
-    allowedTransitions[activeRole]?.[task.status] ?? []
+  useEffect(() => {
+    let mounted = true
+    const workflowId = task.workflow?.id
+    if (!workflowId) {
+      setWorkflow(null)
+      return
+    }
+
+    const load = async () => {
+      try {
+        const payload = await apiFetchJson<WorkflowDefinition[] | { results?: WorkflowDefinition[] }>(
+          "/api/workflows/"
+        )
+        const list = Array.isArray(payload) ? payload : payload.results || []
+        if (!mounted) return
+        setWorkflow(list.find((wf) => wf.id === workflowId) || null)
+      } catch {
+        if (mounted) setWorkflow(null)
+      }
+    }
+
+    void load()
+    return () => {
+      mounted = false
+    }
+  }, [task.workflow?.id])
+
+  const transitions = useMemo(() => {
+    if (!workflow || !task.stage?.id) return []
+    return workflow.transitions
+      .filter(
+        (transition) =>
+          transition.from_stage === task.stage?.id &&
+          transition.allowed_role === activeRole
+      )
+      .map((transition) => ({
+        ...transition,
+        statusValue: stageNameToStatusValue(transition.to_stage_name),
+      }))
+      .filter((item) => Boolean(item.statusValue))
+  }, [workflow, task.stage?.id, activeRole])
 
   return (
     <div className={isCompact ? "space-y-3" : "space-y-4"}>
       {/* Status Display */}
-      <div className="text-sm font-medium text-neutral-500">
-        Status:{" "}
-        {task.status === "WAITING_REVIEW"
-          ? "Waiting Approval"
-          : task.status.replace("_", " ")}
+      <div className="text-xs font-medium text-neutral-500">
+        Status: {task.stage?.name ? formatWorkflowLabel(task.stage.name) : getStatusLabel(task.status)}
       </div>
+
+      {task.workflow?.name && (
+        <div className="text-xs text-neutral-500">
+          Workflow: {task.workflow.name}
+        </div>
+      )}
+
+      {task.stage?.name && (
+        <div className="text-xs text-neutral-500">
+          Stage Order: {task.stage.order + 1}
+        </div>
+      )}
 
       {/* Transition Buttons */}
       {!isTerminal && transitions.length > 0 && (
         <div className="flex gap-2 flex-wrap">
-          {transitions.map((nextStatus) => (
+          {transitions.map((transition) => (
             <button
-              key={nextStatus}
-              onClick={() => setSelectedStatus(nextStatus)}
+              key={transition.id}
+              onClick={() => setSelectedStatus(transition.statusValue!)}
               className={`
-                ${isCompact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}
-                rounded-xl font-medium transition
-                ${selectedStatus === nextStatus ? "ring-2 ring-black" : ""}
-                ${
-                  nextStatus === "DONE"
-                    ? "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
-                    : nextStatus === "WAITING_REVIEW"
-                    ? "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100"
-                    : nextStatus === "IN_PROGRESS"
-                    ? "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100"
-                    : nextStatus === "BLOCKED"
-                    ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
-                    : nextStatus === "CANCELLED"
-                    ? "bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200"
-                    : ""
-                }
+                ${isCompact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"}
+                rounded-lg border font-medium transition hover:opacity-90
+                ${selectedStatus === transition.statusValue ? "ring-2 ring-black/20" : ""}
+                ${stageTone(transition.to_stage_name, false)}
               `}
             >
-              {nextStatus === "WAITING_REVIEW"
-                ? "SUBMIT"
-                : nextStatus === "DONE"
-                ? "APPROVE"
-                : nextStatus === "IN_PROGRESS"
-                ? "IN PROGRESS"
-                : nextStatus.replace("_", " ")}
+              {getStatusLabel(transition.to_stage_name)}
             </button>
           ))}
         </div>
@@ -81,14 +121,14 @@ export default function TaskWorkflow({
       {/* Blocked Reason */}
       {selectedStatus === "BLOCKED" && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">
+          <label className="text-xs font-medium">
             Blocked Reason *
           </label>
           <textarea
             value={blockedReason}
             onChange={(e) => setBlockedReason(e.target.value)}
             rows={isCompact ? 2 : 3}
-            className="w-full border border-neutral-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-black"
+            className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
           />
         </div>
       )}

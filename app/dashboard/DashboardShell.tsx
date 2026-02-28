@@ -1,18 +1,18 @@
 "use client"
 
 import { useAuth } from "@/context/AuthContext"
-import ReceiverView from "./ReceiverView"
-import CreatorView from "./CreatorView"
-import AdminView from "./AdminView"
+import ReceiverDashboard from "./ReceiverDashboard"
+import CreatorDashboard from "./CreatorDashboard"
+import AdminDashboard from "./AdminDashboard"
 
 export default function DashboardShell() {
   const { activeRole } = useAuth()
 
   if (!activeRole) return null
 
-  if (activeRole === "TASK_RECEIVER") return <ReceiverView />
-  if (activeRole === "TASK_CREATOR") return <CreatorView />
-  if (activeRole === "ADMIN") return <AdminView />
+  if (activeRole === "TASK_RECEIVER") return <ReceiverDashboard />
+  if (activeRole === "TASK_CREATOR") return <CreatorDashboard />
+  if (activeRole === "ADMIN") return <AdminDashboard />
 
   return null
 }

@@ -2,15 +2,133 @@
 
 html {
   color-scheme: light;
+  font-size: 13px;
 }
 
 body {
-  background-color: white;
-  color: #171717;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background-color: #f5f6f8;
+  color: #111827;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 * {
-  border-color: #e5e5e5;
+  border-color: #edf1f5;
+}
+
+:root {
+  --surface: #ffffff;
+  --surface-muted: #f8f9fb;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-soft: #eef2f6;
+  --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Density pass: smaller corners and tighter spacing across the app */
+.rounded-xl,
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: 0.5rem !important;
+}
+
+.gap-6 {
+  gap: 1rem !important;
+}
+
+.space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1.25rem !important;
+}
+
+.p-10 {
+  padding: 1.5rem !important;
+}
+
+.p-8 {
+  padding: 1.25rem !important;
+}
+
+@media (min-width: 1024px) {
+  .lg\:gap-6 {
+    gap: 1rem !important;
+  }
+}
+
+.section-title {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kpi-value {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-grid-layout {
+  position: relative;
+  min-height: 400px;
+  transition: height 200ms ease;
+}
+
+.react-grid-item {
+  transition: all 180ms ease;
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 30;
+  will-change: transform;
+}
+
+.react-grid-item.resizing {
+  z-index: 20;
+  will-change: width, height;
+}
+
+.react-grid-item.react-grid-placeholder {
+  z-index: 10;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  bottom: 2px;
+  right: 2px;
+  cursor: se-resize;
+  opacity: 0.65;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+}
+
+.react-grid-placeholder {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px dashed rgba(37, 99, 235, 0.55);
+  border-radius: 8px;
 }
