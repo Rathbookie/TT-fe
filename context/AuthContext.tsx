@@ -9,6 +9,7 @@ type AuthUser = {
   email: string
   first_name: string
   last_name: string
+  tenant_slug: string
   roles: Role[]
 }
 
@@ -77,7 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setRoles(normalizedRoles)
     setIsAuthenticated(true)
 
-    let savedRoleRaw = localStorage.getItem("activeRole")
+    const savedRoleRaw = localStorage.getItem("activeRole")
     let savedRole = savedRoleRaw ? normalizeRole(savedRoleRaw) : null
 
     const apiRoles = normalizedRoles
@@ -110,7 +111,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     )
 
-    if (!res.ok) throw new Error("Invalid credentials")
+    if (!res.ok) {
+      let message = "Invalid credentials"
+      try {
+        const body = (await res.json()) as { detail?: string }
+        if (res.status === 429) {
+          message = body.detail || "Too many login attempts. Please wait and retry."
+        } else {
+          message = body.detail || message
+        }
+      } catch {
+        // keep fallback message
+      }
+      throw new Error(message)
+    }
 
     const data = await res.json()
     console.log("ROLES FROM API:", data.roles)

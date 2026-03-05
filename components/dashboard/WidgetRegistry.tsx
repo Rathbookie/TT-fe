@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react"
 import {
+  Activity,
   AlertTriangle,
   BookMarked,
   Calculator,
@@ -23,6 +24,7 @@ export type DashboardWidgetKey =
   | "featured"
   | "task_table"
   | "task_list"
+  | "recent_activity"
   | "workload_by_status"
   | "calculation"
   | "time_reporting"
@@ -88,6 +90,12 @@ export const WIDGET_CATALOG: WidgetCatalogItem[] = [
     key: "task_list",
     title: "Task List",
     description: "Create a List view using tasks from any location.",
+    tier: "free",
+  },
+  {
+    key: "recent_activity",
+    title: "Recent Activity",
+    description: "Live feed of the latest task updates in your workspace.",
     tier: "free",
   },
   {
@@ -467,6 +475,47 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
         ))}
         {!list.length && (
           <div className="rounded-md bg-neutral-50 p-2 text-[11px] text-slate-500">No tasks available.</div>
+        )}
+      </div>
+    )
+  },
+  recent_activity: ({ context }) => {
+    const serverItems = (context.serverWidgetsByKey.recent_activity?.data || []).map((item, idx) => {
+      const timestampRaw = item.timestamp ? String(item.timestamp) : ""
+      const timestamp = timestampRaw ? new Date(timestampRaw) : null
+      return {
+        id: item.id ? String(item.id) : `activity-${idx}`,
+        message: String(item.message || "Task updated"),
+        timestampLabel:
+          timestamp && !Number.isNaN(timestamp.getTime())
+            ? timestamp.toLocaleString()
+            : "Just now",
+      }
+    })
+    const fallbackItems = [...context.tasks]
+      .filter((task) => Boolean(task.updated_at))
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 10)
+      .map((task) => ({
+        id: `task-${task.id}`,
+        message: `Task updated: '${task.title}'`,
+        timestampLabel: new Date(task.updated_at).toLocaleString(),
+      }))
+    const items = serverItems.length ? serverItems : fallbackItems
+    return card(
+      "Recent Activity",
+      <Activity size={13} className="text-indigo-600" />,
+      <div className="space-y-1.5">
+        {items.slice(0, 10).map((item) => (
+          <div key={item.id} className="rounded-md border border-neutral-200 bg-white p-1.5">
+            <p className="text-[11px] text-slate-700">{item.message}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{item.timestampLabel}</p>
+          </div>
+        ))}
+        {!items.length && (
+          <div className="rounded-md bg-neutral-50 p-2 text-[11px] text-slate-500">
+            No updates yet.
+          </div>
         )}
       </div>
     )

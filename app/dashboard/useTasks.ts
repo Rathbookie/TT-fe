@@ -12,7 +12,11 @@ type TaskListResponse = {
   count?: number
 }
 
-export function useTasks(includeTerminal = false) {
+export function useTasks(
+  includeTerminal = false,
+  boardFilterId: number | null = null,
+  divisionFilterSlug: string | null = null
+) {
   const { activeRole } = useAuth()
 
   const [tasks, setTasks] = useState<Task[]>([])
@@ -43,6 +47,12 @@ export function useTasks(includeTerminal = false) {
           page_size: "20",
           include_terminal: includeTerminal ? "1" : "0",
         })
+        if (boardFilterId) {
+          params.set("board", String(boardFilterId))
+        }
+        if (divisionFilterSlug) {
+          params.set("division", divisionFilterSlug)
+        }
         const data = await apiFetchJson<TaskListResponse>(`/api/tasks/?${params.toString()}`)
 
         setTasks(data.results || [])
@@ -65,7 +75,7 @@ export function useTasks(includeTerminal = false) {
     }
 
     load()
-  }, [activeRole, currentPage, includeTerminal, reloadKey])
+  }, [activeRole, boardFilterId, currentPage, divisionFilterSlug, includeTerminal, reloadKey])
 
   const toggleDrawerFromTopBar = () => {
     if (selectedTask) {
@@ -84,11 +94,17 @@ export function useTasks(includeTerminal = false) {
   }
 
   const updateTaskInState = (updatedTask: Task) => {
-    setTasks(prev =>
-      prev.map(t =>
-        t.id === updatedTask.id ? updatedTask : t
-      )
-    )
+    setTasks((prev) => {
+      const existingIndex = prev.findIndex((task) => task.id === updatedTask.id)
+      if (existingIndex >= 0) {
+        return prev.map((task) => (task.id === updatedTask.id ? updatedTask : task))
+      }
+      // Subtasks are managed in task detail and should not appear in top-level task list.
+      if (updatedTask.parent) {
+        return prev
+      }
+      return [updatedTask, ...prev]
+    })
 
     setSelectedTask(prev =>
       prev?.id === updatedTask.id ? updatedTask : prev

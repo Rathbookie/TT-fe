@@ -3,7 +3,7 @@
 import { Task } from "@/types/task"
 import { getStatusLabel } from "@/lib/workflowDisplay"
 import { ChevronRight, PenSquare } from "lucide-react"
-import { stageTone } from "@/lib/stageTheme"
+import { stageTone, stageToneStyle } from "@/lib/stageTheme"
 
 type Props = {
   task: Task
@@ -76,7 +76,11 @@ export default function TaskRow({
 
       <td className="px-4 py-1.5">
         <div className="truncate whitespace-nowrap overflow-hidden">
-        <StatusBadge status={task.stage?.name || task.status} isTerminal={Boolean(task.stage?.is_terminal)} />
+        <StatusBadge
+          status={task.stage?.name || task.status}
+          isTerminal={Boolean(task.stage?.is_terminal)}
+          color={task.stage?.color || task.status_detail?.color || null}
+        />
         </div>
       </td>
 
@@ -129,13 +133,23 @@ export default function TaskRow({
 /* Status Badge */
 /* ----------------- */
 
-function StatusBadge({ status, isTerminal }: { status: string; isTerminal: boolean }) {
+function StatusBadge({
+  status,
+  isTerminal,
+  color,
+}: {
+  status: string
+  isTerminal: boolean
+  color?: string | null
+}) {
+  const style = stageToneStyle(color)
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${stageTone(
         status,
         isTerminal
       )}`}
+      style={style}
     >
       {getStatusLabel(status)}
     </span>

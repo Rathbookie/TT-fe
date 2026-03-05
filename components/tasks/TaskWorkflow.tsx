@@ -9,7 +9,7 @@ import {
   stageNameToStatusValue,
 } from "@/lib/workflowDisplay"
 import { apiFetchJson } from "@/lib/api"
-import { stageTone } from "@/lib/stageTheme"
+import { stageTone, stageToneStyle } from "@/lib/stageTheme"
 import { WorkflowDefinition } from "@/types/workflow"
 
 type Props = {
@@ -17,6 +17,8 @@ type Props = {
   activeRole: Role
   selectedStatus: TaskStatus | null
   setSelectedStatus: (status: TaskStatus) => void
+  selectedStageId?: number | null
+  setSelectedStageId?: (stageId: number | null) => void
   blockedReason: string
   setBlockedReason: (value: string) => void
   mode?: "full" | "compact"
@@ -27,6 +29,8 @@ export default function TaskWorkflow({
   activeRole,
   selectedStatus,
   setSelectedStatus,
+  selectedStageId,
+  setSelectedStageId,
   blockedReason,
   setBlockedReason,
   mode = "full",
@@ -40,12 +44,12 @@ export default function TaskWorkflow({
   useEffect(() => {
     let mounted = true
     const workflowId = task.workflow?.id
-    if (!workflowId) {
-      setWorkflow(null)
-      return
-    }
 
     const load = async () => {
+      if (!workflowId) {
+        if (mounted) setWorkflow(null)
+        return
+      }
       try {
         const payload = await apiFetchJson<WorkflowDefinition[] | { results?: WorkflowDefinition[] }>(
           "/api/workflows/"
@@ -76,7 +80,6 @@ export default function TaskWorkflow({
         ...transition,
         statusValue: stageNameToStatusValue(transition.to_stage_name),
       }))
-      .filter((item) => Boolean(item.statusValue))
   }, [workflow, task.stage?.id, activeRole])
 
   return (
@@ -104,13 +107,21 @@ export default function TaskWorkflow({
           {transitions.map((transition) => (
             <button
               key={transition.id}
-              onClick={() => setSelectedStatus(transition.statusValue!)}
+              onClick={() => {
+                if (setSelectedStageId) {
+                  setSelectedStageId(transition.to_stage)
+                }
+                if (transition.statusValue) {
+                  setSelectedStatus(transition.statusValue)
+                }
+              }}
               className={`
                 ${isCompact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"}
                 rounded-lg border font-medium transition hover:opacity-90
-                ${selectedStatus === transition.statusValue ? "ring-2 ring-black/20" : ""}
+                ${(selectedStageId === transition.to_stage || selectedStatus === transition.statusValue) ? "ring-2 ring-black/20" : ""}
                 ${stageTone(transition.to_stage_name, false)}
               `}
+              style={stageToneStyle(transition.to_stage_color)}
             >
               {getStatusLabel(transition.to_stage_name)}
             </button>

@@ -87,7 +87,33 @@ export const apiFetchJson = async <T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> => {
-  const res = await apiFetch(endpoint, options)
+  const method = String(options.method || "GET").toUpperCase()
+  const retryable = method === "GET" || method === "HEAD" || method === "OPTIONS"
+
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms))
+
+  const parseThrottleMs = (retryAfterHeader: string | null, bodyText: string) => {
+    if (retryAfterHeader) {
+      const sec = Number.parseInt(retryAfterHeader, 10)
+      if (Number.isFinite(sec) && sec > 0) return sec * 1000
+    }
+    const match = bodyText.match(/(\d+)\s*seconds?/i)
+    if (match) {
+      const sec = Number.parseInt(match[1], 10)
+      if (Number.isFinite(sec) && sec > 0) return sec * 1000
+    }
+    return null
+  }
+
+  let res = await apiFetch(endpoint, options)
+  if (retryable && res.status === 429) {
+    const retryAfter = res.headers.get("retry-after")
+    const throttleBody = await res.text()
+    const waitMs = parseThrottleMs(retryAfter, throttleBody) || 1500
+    await sleep(Math.min(waitMs, 30000))
+    res = await apiFetch(endpoint, options)
+  }
 
   const contentType = res.headers.get("content-type")
 

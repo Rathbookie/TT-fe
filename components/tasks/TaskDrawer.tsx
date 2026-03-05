@@ -7,10 +7,10 @@ import TaskWorkflow from "./TaskWorkflow"
 import { TaskStatus } from "@/lib/statusConfig"
 import TaskAttachmentsPreview from "./TaskAttachmentsPreview"
 import ReceiverProgressUpload from "./ReceiverProgressUpload"
+import TaskProofs from "./TaskProofs"
 import Badge from "@/components/ui/Badge"
 import { Task } from "@/types/task"
 import CreatorSubmissionView from "./CreatorSubmissionView"
-import { getStatusLabel } from "@/lib/workflowDisplay"
 
 type TaskHistoryEntry = {
   id: number
@@ -24,6 +24,7 @@ interface Props {
   task: Task
   onClose: () => void
   onEdit: (taskId: number) => void
+  onCreateSubtask?: (parentTask: Task) => void
   onTaskUpdated?: (updatedTask: Task) => void // made optional
   updateTaskInState: (updatedTask: Task) => void
 }
@@ -32,6 +33,7 @@ export default function TaskDrawer({
   task,
   onClose,
   onEdit,
+  onCreateSubtask,
   onTaskUpdated,
   updateTaskInState,
 }: Props) {
@@ -41,6 +43,7 @@ export default function TaskDrawer({
   const [history, setHistory] = useState<TaskHistoryEntry[]>([])
   const [selectedStatus, setSelectedStatus] =
     useState<TaskStatus | null>(null)
+  const [selectedStageId, setSelectedStageId] = useState<number | null>(task?.stage?.id ?? null)
   const [blockedReason, setBlockedReason] = useState("")
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
@@ -83,11 +86,15 @@ export default function TaskDrawer({
   useEffect(() => {
     if (!task) return
     setSelectedStatus(null)
+    setSelectedStageId(task?.stage?.id ?? null)
     setBlockedReason(task?.blocked_reason || "")
   }, [task])
 
   if (!task) return null
   if (!activeRole) return null
+  const isTerminal =
+    task.stage?.is_terminal ??
+    (task.status === "DONE" || task.status === "CANCELLED")
 
   const displayUser = (user?: Task["created_by"] | Task["assigned_to"]) => {
     if (!user) return "—"
@@ -108,7 +115,7 @@ export default function TaskDrawer({
 
   const handleSaveStatus = async () => {
     console.log("Active Role:", activeRole)
-    if (!selectedStatus) return
+    if (!selectedStatus && selectedStageId === (task.stage?.id ?? null)) return
 
     if (
       selectedStatus === "BLOCKED" &&
@@ -121,7 +128,13 @@ export default function TaskDrawer({
     setLoading(true)
 
     const formData = new FormData()
-    formData.append("status", selectedStatus)
+    const stageChanged = selectedStageId && selectedStageId !== (task.stage?.id ?? null)
+    if (selectedStatus && !stageChanged) {
+      formData.append("status", selectedStatus)
+    }
+    if (stageChanged) {
+      formData.append("stage_id", String(selectedStageId))
+    }
     formData.append("version", task.version.toString())
 
     if (selectedStatus === "BLOCKED") {
@@ -150,9 +163,16 @@ export default function TaskDrawer({
 
       if (!res.ok) {
         const text = await res.text()
+        let message = "Update failed."
+        try {
+          const parsed = JSON.parse(text) as { detail?: string; stage_id?: string; status?: string }
+          message = parsed.detail || parsed.stage_id || parsed.status || message
+        } catch {
+          // keep fallback
+        }
         console.error("Status:", res.status)
         console.error("Response:", text)
-        alert("Update failed.")
+        alert(message)
         return
       }
 
@@ -187,6 +207,7 @@ export default function TaskDrawer({
               variant="status"
               value={task.stage?.name || task.status}
               isTerminal={Boolean(task.stage?.is_terminal)}
+              color={task.stage?.color || task.status_detail?.color || null}
             />
             <Badge variant="priority" value={task.priority ?? "P3"} />
           </div>
@@ -213,12 +234,14 @@ export default function TaskDrawer({
             activeRole={activeRole}
             selectedStatus={selectedStatus}
             setSelectedStatus={setSelectedStatus}
+            selectedStageId={selectedStageId}
+            setSelectedStageId={setSelectedStageId}
             blockedReason={blockedReason}
             setBlockedReason={setBlockedReason}
             mode="compact"
           />
 
-          {selectedStatus && (
+          {(selectedStatus || selectedStageId !== (task.stage?.id ?? null)) && (
             <button
               onClick={handleSaveStatus}
               disabled={loading}
@@ -246,6 +269,19 @@ export default function TaskDrawer({
           )}
         />
 
+        {/* PROOFS */}
+        <div className="bg-neutral-50 rounded-lg p-4 space-y-2">
+          <p className="text-xs uppercase tracking-wide text-neutral-500">
+            Proofs
+          </p>
+          {isTerminal && (
+            <p className="text-[11px] text-neutral-500">
+              Proof cant be added when a task is at a terminal stage.
+            </p>
+          )}
+          <TaskProofs taskId={task.id} disabled={isTerminal} />
+        </div>
+
         {activeRole === "TASK_RECEIVER" &&
           task.status === "IN_PROGRESS" && (
             <ReceiverProgressUpload
@@ -262,17 +298,30 @@ export default function TaskDrawer({
 
         {/* EDIT BUTTON */}
         {activeRole !== "TASK_RECEIVER" && (
-          <button
-            onClick={() => onEdit(task.id)}
-            disabled={task.status === "DONE"}
-            className={`w-full py-2 rounded-lg text-xs font-medium transition ${
-              (task.stage?.is_terminal ?? task.status === "DONE")
-                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                : "bg-black text-white hover:bg-neutral-900"
-            }`}
-          >
-            Edit Task
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onEdit(task.id)}
+              disabled={task.status === "DONE"}
+              className={`w-full py-2 rounded-lg text-xs font-medium transition ${
+                (task.stage?.is_terminal ?? task.status === "DONE")
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-black text-white hover:bg-neutral-900"
+              }`}
+            >
+              Edit Task
+            </button>
+            <button
+              onClick={() => onCreateSubtask?.(task)}
+              disabled={task.stage?.is_terminal ?? task.status === "DONE"}
+              className={`w-full py-2 rounded-lg text-xs font-medium transition ${
+                (task.stage?.is_terminal ?? task.status === "DONE")
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+            >
+              Create Subtask
+            </button>
+          </div>
         )}
 
         {/* METADATA */}
@@ -314,9 +363,14 @@ export default function TaskDrawer({
             {task.stage?.name && (
               <div>
                 <p className="text-neutral-500">Current Stage</p>
-                <p className="text-neutral-900 font-medium">
-                  {getStatusLabel(task.stage.name)}
-                </p>
+                <div className="pt-1">
+                  <Badge
+                    variant="status"
+                    value={task.stage.name}
+                    isTerminal={Boolean(task.stage?.is_terminal)}
+                    color={task.stage?.color || task.status_detail?.color || null}
+                  />
+                </div>
               </div>
             )}
 

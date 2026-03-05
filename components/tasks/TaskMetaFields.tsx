@@ -12,8 +12,8 @@ type Props = {
   setDueDate: (v: string) => void
   dueTime: string
   setDueTime: (v: string) => void
-  assignedToId: number | null
-  setAssignedToId: (v: number) => void
+  assigneeIds: number[]
+  setAssigneeIds: (v: number[]) => void
 }
 
 export default function TaskMetaFields({
@@ -24,8 +24,8 @@ export default function TaskMetaFields({
   setDueDate,
   dueTime,
   setDueTime,
-  assignedToId: _assignedToId,
-  setAssignedToId,
+  assigneeIds,
+  setAssigneeIds,
 }: Props) {
   const [userSearch, setUserSearch] = useState("")
   const [userResults, setUserResults] = useState<UserProjection[]>([])
@@ -41,7 +41,8 @@ export default function TaskMetaFields({
         `/api/users/?search=${encodeURIComponent(q)}`
       )
       setUserResults(Array.isArray(data) ? data : (data.results || []))
-    } catch {
+    } catch (err) {
+      console.error("User search failed:", err)
       setUserResults([])
     }
   }
@@ -69,14 +70,29 @@ export default function TaskMetaFields({
               <div
                 key={u.id}
                 onClick={() => {
-                  setAssignedToId(u.id)
-                  setUserSearch(u.full_name)
+                  if (!assigneeIds.includes(u.id)) {
+                    setAssigneeIds([...assigneeIds, u.id])
+                  }
+                  setUserSearch("")
                   setUserResults([])
                 }}
                 className="px-3 py-1.5 hover:bg-neutral-100 cursor-pointer text-xs"
               >
                 {u.full_name}
               </div>
+            ))}
+          </div>
+        )}
+        {assigneeIds.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {assigneeIds.map((id) => (
+              <button
+                key={id}
+                onClick={() => setAssigneeIds(assigneeIds.filter((item) => item !== id))}
+                className="rounded border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-slate-600"
+              >
+                User #{id} ×
+              </button>
             ))}
           </div>
         )}

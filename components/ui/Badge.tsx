@@ -1,7 +1,7 @@
 "use client"
 
 import { getStatusLabel } from "@/lib/workflowDisplay"
-import { stageTone } from "@/lib/stageTheme"
+import { stageTone, stageToneStyle } from "@/lib/stageTheme"
 
 type Variant = "status" | "priority"
 
@@ -9,13 +9,16 @@ interface Props {
   variant: Variant
   value: string
   isTerminal?: boolean
+  color?: string | null
 }
 
-export default function Badge({ variant, value, isTerminal = false }: Props) {
+export default function Badge({ variant, value, isTerminal = false, color = null }: Props) {
   if (variant === "status") {
+    const style = stageToneStyle(color)
     return (
       <span
         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${stageTone(value, isTerminal)}`}
+        style={style}
       >
         {getStatusLabel(value)}
       </span>

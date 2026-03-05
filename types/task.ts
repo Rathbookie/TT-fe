@@ -20,6 +20,30 @@ export type TaskAttachment = {
   type: "REQUIREMENT" | "SUBMISSION"
 }
 
+export type TaskProof = {
+  id: number
+  type: "FILE" | "TEXT" | "URL"
+  file?: string | null
+  file_url?: string | null
+  file_name?: string | null
+  text?: string | null
+  url?: string | null
+  label?: string | null
+  submitted_at: string
+  submitted_by?: UserProjection | null
+}
+
+export type TaskStatusDetail = {
+  id: number
+  board: number
+  name: string
+  color: string
+  order: number
+  is_terminal: boolean
+  is_cancelled: boolean
+  is_default: boolean
+}
+
 export type WorkflowProjection = {
   id: number
   name: string
@@ -31,15 +55,20 @@ export type WorkflowStageProjection = {
   name: string
   order: number
   is_terminal: boolean
+  color?: string
 }
 
 
 export type Task = {
   id: number
+  ref_id?: string
   title: string
   description: string
 
+  board?: number | null
+  parent?: number | null
   status: TaskStatus
+  status_detail?: TaskStatusDetail | null
   workflow?: WorkflowProjection | null
   stage?: WorkflowStageProjection | null
   priority?: TaskPriority | null
@@ -47,6 +76,7 @@ export type Task = {
   due_date?: string | null
   blocked_reason?: string | null
 
+  assignees?: UserProjection[]
   assigned_to?: UserProjection | null
   created_by?: UserProjection
 
@@ -56,5 +86,6 @@ export type Task = {
   updated_at: string
 
   attachments: TaskAttachment[]
+  proofs?: TaskProof[]
+  subtask_count?: number
 }
-

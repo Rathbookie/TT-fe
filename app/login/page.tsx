@@ -17,8 +17,8 @@ export default function Page() {
     try {
       await login(email, password)
       router.push("/")
-    } catch {
-      setError("Invalid credentials")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid credentials")
     }
   }
 
@@ -30,7 +30,7 @@ export default function Page() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-neutral-300"
-            placeholder="Email"
+            placeholder="Email or username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />

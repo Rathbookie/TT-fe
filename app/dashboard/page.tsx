@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import WorkspaceShell from "@/components/layout/WorkspaceShell"
 import { apiFetchJson } from "@/lib/api"
 import WidgetRenderer, { ExpandedWidgetModal } from "@/components/dashboard/WidgetRenderer"
@@ -25,6 +26,7 @@ type DashboardConfigResponse = {
   dashboard: {
     id: number
     name: string
+    scope_key?: string | null
     visibility: "PRIVATE" | "INTERNAL" | "PUBLIC"
     is_default: boolean
     can_edit: boolean
@@ -44,7 +46,7 @@ const LEGACY_WIDGET_KEY_MAP: Record<string, WidgetInstance["key"]> = {
   completion_rate: "calculation",
   workflow_stage_distribution: "workload_by_status",
   my_tasks: "task_list",
-  recent_activity: "discussion",
+  recent_activity: "recent_activity",
   approval_queue: "discussion",
 }
 
@@ -53,6 +55,7 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   { id: "w-task-table", key: "task_table", x: 0, y: 9, w: 12, h: 11, minW: 6, minH: 8, settings: { mode: "all", limit: 12 } },
   { id: "w-workload", key: "workload_by_status", x: 0, y: 20, w: 6, h: 9, minW: 4, minH: 6, settings: {} },
   { id: "w-due-soon", key: "tasks_due_soon", x: 6, y: 20, w: 6, h: 9, minW: 4, minH: 6, settings: {} },
+  { id: "w-recent-activity", key: "recent_activity", x: 0, y: 29, w: 12, h: 8, minW: 4, minH: 6, settings: {} },
 ]
 const LOCAL_DASHBOARD_KEY = "workos_dashboard_unsynced_v1"
 
@@ -81,9 +84,33 @@ function normalizedWidgets(items: WidgetInstance[]) {
   })
 }
 
-export default function DashboardPage() {
-  const { activeRole } = useAuth()
+type DashboardPageProps = {
+  divisionSlugOverride?: string | null
+  titleOverride?: string
+  subtitleOverride?: string
+  dashboardStorageKey?: string
+}
+
+export default function DashboardPage({
+  divisionSlugOverride = null,
+  titleOverride,
+  subtitleOverride,
+  dashboardStorageKey,
+}: DashboardPageProps = {}) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const { activeRole, user } = useAuth()
   const isAdminRole = activeRole === "ADMIN"
+  const pathParts = pathname.split("/").filter(Boolean)
+  const pathnameDivisionSlug =
+    pathParts.length >= 3 && pathParts[1] === "divisions" ? pathParts[2] : null
+  const effectiveDivisionSlug = divisionSlugOverride || pathnameDivisionSlug
+  const isDivisionScoped = Boolean(effectiveDivisionSlug)
+  const localDashboardKey = dashboardStorageKey || (
+    isDivisionScoped
+      ? `workos_dashboard_division_${effectiveDivisionSlug}`
+      : LOCAL_DASHBOARD_KEY
+  )
 
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -92,7 +119,6 @@ export default function DashboardPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [enabledModules, setEnabledModules] = useState<string[]>([])
-  const [autoRefresh, setAutoRefresh] = useState(true)
   const [statusFilter, setStatusFilter] = useState("ALL")
   const [assigneeFilter, setAssigneeFilter] = useState("ALL")
   const [dateFilter, setDateFilter] = useState<"all" | "7d" | "30d">("all")
@@ -103,10 +129,18 @@ export default function DashboardPage() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [saveError, setSaveError] = useState<string | null>(null)
   const effectiveCanEdit = dashboardCanEdit || Boolean(activeRole)
+  const autoRefreshEnabled = !editing
 
   const [serverWidgetsByKey, setServerWidgetsByKey] = useState<
     Record<string, { value?: number | string; data?: Array<Record<string, unknown>> }>
   >({})
+
+  useEffect(() => {
+    if (!user?.tenant_slug) return
+    if (pathname === "/dashboard") {
+      router.replace(`/${user.tenant_slug}/dashboard`)
+    }
+  }, [pathname, router, user?.tenant_slug])
 
   const gridLayout = useMemo<Layout[]>(
     () =>
@@ -129,9 +163,42 @@ export default function DashboardPage() {
     const silent = opts?.silent === true
     if (!effectiveCanEdit || !activeRole) return false
     if (!dashboardId && !allowCreate) return true
+
+    if (isDivisionScoped) {
+      if (!silent) {
+        setSaveState("saving")
+        setSaveError(null)
+      }
+      try {
+        const scopeKey = `division:${effectiveDivisionSlug}`
+        await apiFetchJson("/api/dashboard/config/?scope_key=" + encodeURIComponent(scopeKey), {
+          method: "PATCH",
+          body: JSON.stringify({
+            auto_refresh_seconds: autoRefreshEnabled ? 30 : 0,
+            global_filters: {
+              status: statusFilter,
+              assignee: assigneeFilter,
+              due_range: dateFilter,
+            },
+            widgets,
+          }),
+        })
+        if (!silent) {
+          setSaveState("saved")
+        }
+        return true
+      } catch (err) {
+        if (!silent) {
+          setSaveError(err instanceof Error ? err.message : "Unknown save error")
+          setSaveState("error")
+        }
+        return false
+      }
+    }
+
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
-        LOCAL_DASHBOARD_KEY,
+        localDashboardKey,
         JSON.stringify({
           dashboardId,
           widgets,
@@ -177,7 +244,7 @@ export default function DashboardPage() {
           dashboard_id: targetDashboardId,
           name: dashboardName,
           visibility: dashboardVisibility,
-          auto_refresh_seconds: autoRefresh ? 30 : 0,
+          auto_refresh_seconds: autoRefreshEnabled ? 30 : 0,
           global_filters: {
             status: statusFilter,
             assignee: assigneeFilter,
@@ -187,7 +254,7 @@ export default function DashboardPage() {
         }),
       })
       if (typeof window !== "undefined") {
-        window.localStorage.removeItem(LOCAL_DASHBOARD_KEY)
+        window.localStorage.removeItem(localDashboardKey)
       }
       if (!silent) {
         setSaveState("saved")
@@ -211,13 +278,49 @@ export default function DashboardPage() {
     statusFilter,
     assigneeFilter,
     dateFilter,
-    autoRefresh,
+    autoRefreshEnabled,
     isAdminRole,
+    isDivisionScoped,
+    localDashboardKey,
   ])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      if (isDivisionScoped) {
+        const scopedTaskPath = effectiveDivisionSlug
+          ? `/api/tasks/?division=${effectiveDivisionSlug}&page=1&page_size=200&include_terminal=1`
+          : "/api/tasks/?page=1&page_size=200&include_terminal=1"
+        const scopeKey = `division:${effectiveDivisionSlug}`
+        const [taskPayload, scopedConfig] = await Promise.all([
+          apiFetchJson<TaskListResponse>(scopedTaskPath),
+          apiFetchJson<DashboardConfigResponse>(
+            "/api/dashboard/config/?scope_key=" + encodeURIComponent(scopeKey)
+          ),
+        ])
+        setTasks(taskPayload.results || [])
+        setEnabledModules([])
+        setServerWidgetsByKey({})
+        setDashboardId(scopedConfig.dashboard.id)
+        setDashboardCanEdit(Boolean(scopedConfig.dashboard.can_edit) || Boolean(activeRole))
+        setDashboardVisibility(scopedConfig.dashboard.visibility || "INTERNAL")
+        setWidgets(
+          normalizedWidgets(
+            scopedConfig.dashboard.widgets && scopedConfig.dashboard.widgets.length
+              ? scopedConfig.dashboard.widgets
+              : DEFAULT_LAYOUT
+          )
+        )
+        const defaultName = titleOverride || `${effectiveDivisionSlug} Dashboard`
+        setDashboardName(defaultName)
+        const filters = scopedConfig.dashboard.global_filters || {}
+        setStatusFilter(filters.status || "ALL")
+        setAssigneeFilter(filters.assignee || "ALL")
+        setDateFilter(filters.due_range || "all")
+        setLoading(false)
+        return
+      }
+
       const [taskResult, dashboardResult, configResult] = await Promise.allSettled([
         apiFetchJson<TaskListResponse>("/api/tasks/?page=1&page_size=200&include_terminal=1"),
         apiFetchJson<DashboardWidgetsResponse>("/api/dashboard/widgets/"),
@@ -256,7 +359,7 @@ export default function DashboardPage() {
         )
         let resolvedWidgets = serverWidgets
         if (typeof window !== "undefined") {
-          const raw = window.localStorage.getItem(LOCAL_DASHBOARD_KEY)
+          const raw = window.localStorage.getItem(localDashboardKey)
           if (raw) {
             try {
               const local = JSON.parse(raw) as {
@@ -288,12 +391,11 @@ export default function DashboardPage() {
         setStatusFilter(filters.status || "ALL")
         setAssigneeFilter(filters.assignee || "ALL")
         setDateFilter(filters.due_range || "all")
-        setAutoRefresh((dash.auto_refresh_seconds || 30) > 0)
       } else {
         console.error("Dashboard config fetch failed:", configResult.reason)
         setDashboardCanEdit(isAdminRole)
         if (typeof window !== "undefined") {
-          const raw = window.localStorage.getItem(LOCAL_DASHBOARD_KEY)
+          const raw = window.localStorage.getItem(localDashboardKey)
           if (raw) {
             try {
               const local = JSON.parse(raw) as { widgets?: WidgetInstance[] }
@@ -317,19 +419,19 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAdminRole])
+  }, [activeRole, effectiveDivisionSlug, isAdminRole, isDivisionScoped, localDashboardKey, titleOverride])
 
   useEffect(() => {
     if (activeRole) void load()
   }, [activeRole, load])
 
   useEffect(() => {
-    if (!activeRole || !autoRefresh) return
+    if (!activeRole || !autoRefreshEnabled) return
     const timer = window.setInterval(() => {
       void load()
     }, 30000)
     return () => window.clearInterval(timer)
-  }, [activeRole, autoRefresh, load])
+  }, [activeRole, autoRefreshEnabled, load])
 
   useEffect(() => {
     if (loading) return
@@ -449,8 +551,11 @@ export default function DashboardPage() {
 
   return (
     <WorkspaceShell
-      title={dashboardName}
-      subtitle="Grid dashboard engine with persisted x/y/w/h layout and collision-safe drag/resize."
+      title={titleOverride || dashboardName}
+      subtitle={
+        subtitleOverride ||
+        "Grid dashboard engine with persisted x/y/w/h layout and collision-safe drag/resize."
+      }
       actions={
         <div className="flex items-center gap-1.5">
           <button
@@ -459,17 +564,6 @@ export default function DashboardPage() {
           >
             <RefreshCw size={12} />
             Refresh
-          </button>
-          <button
-            onClick={() => setAutoRefresh((prev) => !prev)}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] ${
-              autoRefresh
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border border-neutral-200 bg-white text-slate-600"
-            }`}
-            disabled={!effectiveCanEdit}
-          >
-            Auto-refresh: {autoRefresh ? "On" : "Off"}
           </button>
           <button
             onClick={() => setEditing((prev) => !prev)}

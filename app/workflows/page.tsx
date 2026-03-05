@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { GripVertical, Plus, Save, Send, Trash2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { GripVertical, Plus, Save, Send, Trash2, X } from "lucide-react"
 import WorkspaceShell from "@/components/layout/WorkspaceShell"
 import { apiFetch, apiFetchJson } from "@/lib/api"
 import { WorkflowDefinition } from "@/types/workflow"
+import { useAuth } from "@/context/AuthContext"
 
 type WorkflowListResponse =
   | WorkflowDefinition[]
@@ -13,6 +15,34 @@ type WorkflowListResponse =
     }
 
 const ROLE_OPTIONS = ["TASK_CREATOR", "TASK_RECEIVER", "ADMIN"]
+const DEFAULT_STAGE_COLOR = "#6B7280"
+const STAGE_PRESET_COLORS = [
+  "#6B7280",
+  "#2563EB",
+  "#0EA5E9",
+  "#10B981",
+  "#059669",
+  "#84CC16",
+  "#F59E0B",
+  "#F97316",
+  "#EF4444",
+  "#EC4899",
+  "#8B5CF6",
+  "#6366F1",
+  "#14B8A6",
+  "#A855F7",
+  "#64748B",
+]
+
+type TransitionGroup = {
+  key: string
+  from_stage: number
+  to_stage: number
+  allowed_roles: string[]
+}
+
+const formatRoleLabel = (role: string) =>
+  role.replaceAll("_", " ").replace("TASK ", "Task ")
 
 function normalizeWorkflowForDiff(workflow: WorkflowDefinition) {
   const stages = [...workflow.stages]
@@ -23,7 +53,7 @@ function normalizeWorkflowForDiff(workflow: WorkflowDefinition) {
       order: stage.order,
       is_terminal: stage.is_terminal,
       requires_attachments: stage.requires_attachments,
-      requires_approval: stage.requires_approval,
+      color: stage.color || DEFAULT_STAGE_COLOR,
     }))
 
   const transitions = [...workflow.transitions]
@@ -40,28 +70,88 @@ function normalizeWorkflowForDiff(workflow: WorkflowDefinition) {
 
   return JSON.stringify({
     name: workflow.name,
+    statuses: [...(workflow.statuses || [])]
+      .sort((a, b) => a.order - b.order)
+      .map((status) => ({
+        id: status.id,
+        name: status.name,
+        order: status.order,
+        is_terminal: status.is_terminal,
+        color: status.color || DEFAULT_STAGE_COLOR,
+      })),
+    transition_rules: [...(workflow.transition_rules || [])]
+      .map((rule) => ({
+        from_status: rule.from_status,
+        to_status: rule.to_status,
+        allowed_roles: [...(rule.allowed_roles || [])].sort(),
+        proof_requirements: [...(rule.proof_requirements || [])]
+          .map((req) => ({
+            type: req.type,
+            label: req.label,
+            is_mandatory: req.is_mandatory,
+          }))
+          .sort((a, b) => `${a.type}:${a.label}`.localeCompare(`${b.type}:${b.label}`)),
+      }))
+      .sort((a, b) =>
+        `${a.from_status}:${a.to_status}:${a.allowed_roles.join(",")}`.localeCompare(
+          `${b.from_status}:${b.to_status}:${b.allowed_roles.join(",")}`
+        )
+      ),
     stages,
     transitions,
   })
 }
 
 function hydrateTransitions(workflow: WorkflowDefinition): WorkflowDefinition {
+  const statuses = [...(workflow.statuses || [])].sort((a, b) => a.order - b.order)
+  const transitionRules = (workflow.transition_rules || []).map((rule) => {
+    const from = statuses.find((status) => status.id === rule.from_status)
+    const to = statuses.find((status) => status.id === rule.to_status)
+    return {
+      ...rule,
+      from_status_name: from?.name || rule.from_status_name,
+      to_status_name: to?.name || rule.to_status_name,
+      allowed_roles: rule.allowed_roles || [],
+      proof_requirements: rule.proof_requirements || [],
+    }
+  })
   return {
     ...workflow,
-    stages: [...workflow.stages].sort((a, b) => a.order - b.order),
+    statuses: statuses.map((status) => ({
+      ...status,
+      color: status.color || DEFAULT_STAGE_COLOR,
+    })),
+    transition_rules: transitionRules,
+    stages: [...workflow.stages]
+      .sort((a, b) => a.order - b.order)
+      .map((stage) => ({
+        ...stage,
+        color: stage.color || DEFAULT_STAGE_COLOR,
+      })),
     transitions: workflow.transitions.map((transition) => ({
       ...transition,
       from_stage_name:
         workflow.stages.find((stage) => stage.id === transition.from_stage)?.name ||
         transition.from_stage_name,
+      from_stage_color:
+        workflow.stages.find((stage) => stage.id === transition.from_stage)?.color ||
+        transition.from_stage_color ||
+        DEFAULT_STAGE_COLOR,
       to_stage_name:
         workflow.stages.find((stage) => stage.id === transition.to_stage)?.name ||
         transition.to_stage_name,
+      to_stage_color:
+        workflow.stages.find((stage) => stage.id === transition.to_stage)?.color ||
+        transition.to_stage_color ||
+        DEFAULT_STAGE_COLOR,
     })),
   }
 }
 
 export default function WorkflowBuilderPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -71,6 +161,7 @@ export default function WorkflowBuilderPage() {
   const [selectedStageId, setSelectedStageId] = useState<number | null>(null)
   const [draggingStageId, setDraggingStageId] = useState<number | null>(null)
   const [baselines, setBaselines] = useState<Record<number, string>>({})
+  const [customStageColor, setCustomStageColor] = useState(DEFAULT_STAGE_COLOR)
 
   const selectedWorkflow = useMemo(
     () => workflows.find((wf) => wf.id === selectedWorkflowId) ?? null,
@@ -80,6 +171,29 @@ export default function WorkflowBuilderPage() {
     () => selectedWorkflow?.stages.find((stage) => stage.id === selectedStageId) ?? null,
     [selectedWorkflow, selectedStageId]
   )
+  const selectedStageIndex = useMemo(
+    () =>
+      selectedWorkflow?.stages.findIndex((stage) => stage.id === selectedStageId) ?? -1,
+    [selectedWorkflow, selectedStageId]
+  )
+  const nextStage = useMemo(
+    () =>
+      selectedWorkflow && selectedStageIndex >= 0
+        ? selectedWorkflow.stages[selectedStageIndex + 1] || null
+        : null,
+    [selectedWorkflow, selectedStageIndex]
+  )
+
+  useEffect(() => {
+    setCustomStageColor(selectedStage?.color || DEFAULT_STAGE_COLOR)
+  }, [selectedStage?.id, selectedStage?.color])
+
+  useEffect(() => {
+    if (!user?.tenant_slug) return
+    if (pathname === "/workflows") {
+      router.replace(`/${user.tenant_slug}/workflows`)
+    }
+  }, [pathname, router, user?.tenant_slug])
 
   const hasUnsavedChanges = useMemo(() => {
     if (!selectedWorkflow) return false
@@ -201,87 +315,258 @@ export default function WorkflowBuilderPage() {
     }
   }
 
-  const addTransition = () => {
-    if (!selectedWorkflow || selectedWorkflow.stages.length < 2) return
-    const fromStage = selectedWorkflow.stages[0]
-    const toStage = selectedWorkflow.stages[1]
+  const transitionGroups = useMemo<TransitionGroup[]>(() => {
+    if (!selectedWorkflow) return []
+    const map = new Map<string, TransitionGroup>()
+    selectedWorkflow.transitions.forEach((transition) => {
+      const key = `${transition.from_stage}->${transition.to_stage}`
+      const current =
+        map.get(key) ||
+        {
+          key,
+          from_stage: transition.from_stage,
+          to_stage: transition.to_stage,
+          allowed_roles: [],
+        }
+      if (!current.allowed_roles.includes(transition.allowed_role)) {
+        current.allowed_roles.push(transition.allowed_role)
+      }
+      map.set(key, current)
+    })
+    return [...map.values()].sort((a, b) =>
+      `${a.from_stage}:${a.to_stage}`.localeCompare(`${b.from_stage}:${b.to_stage}`)
+    )
+  }, [selectedWorkflow])
+
+  const selectedTransitionGroup = useMemo(() => {
+    if (!selectedStage || !nextStage) return null
+    return (
+      transitionGroups.find(
+        (group) =>
+          group.from_stage === selectedStage.id && group.to_stage === nextStage.id
+      ) || null
+    )
+  }, [selectedStage, nextStage, transitionGroups])
+
+  const updateTransitionGroup = (
+    groupKey: string,
+    patch: Partial<Omit<TransitionGroup, "key">>
+  ) => {
+    if (!selectedWorkflow) return
+    patchSelectedWorkflow((workflow) => ({
+      ...workflow,
+      transitions: (() => {
+        const existingGroups = new Map<string, TransitionGroup>()
+        workflow.transitions.forEach((transition) => {
+          const key = `${transition.from_stage}->${transition.to_stage}`
+          const current =
+            existingGroups.get(key) ||
+            {
+              key,
+              from_stage: transition.from_stage,
+              to_stage: transition.to_stage,
+              allowed_roles: [],
+            }
+          if (!current.allowed_roles.includes(transition.allowed_role)) {
+            current.allowed_roles.push(transition.allowed_role)
+          }
+          existingGroups.set(key, current)
+        })
+
+        const currentGroup = existingGroups.get(groupKey)
+        if (!currentGroup) return workflow.transitions
+
+        existingGroups.delete(groupKey)
+        const nextGroup: TransitionGroup = {
+          ...currentGroup,
+          ...patch,
+        }
+
+        const nextKey = `${nextGroup.from_stage}->${nextGroup.to_stage}`
+        const mergeTarget = existingGroups.get(nextKey)
+        if (mergeTarget) {
+          mergeTarget.allowed_roles = Array.from(
+            new Set([...(mergeTarget.allowed_roles || []), ...(nextGroup.allowed_roles || [])])
+          )
+          existingGroups.set(nextKey, mergeTarget)
+        } else {
+          existingGroups.set(nextKey, {
+            ...nextGroup,
+            key: nextKey,
+            allowed_roles: Array.from(new Set(nextGroup.allowed_roles || [])),
+          })
+        }
+
+        const expanded: WorkflowDefinition["transitions"] = []
+        existingGroups.forEach((group) => {
+          const from = workflow.stages.find((stage) => stage.id === group.from_stage)
+          const to = workflow.stages.find((stage) => stage.id === group.to_stage)
+          const roles = group.allowed_roles.length ? group.allowed_roles : ["TASK_CREATOR"]
+          roles.forEach((role, idx) => {
+            expanded.push({
+              id: -Date.now() - idx - Math.round(Math.random() * 1000),
+              from_stage: group.from_stage,
+              from_stage_name: from?.name || "From",
+              to_stage: group.to_stage,
+              to_stage_name: to?.name || "To",
+              allowed_role: role,
+            })
+          })
+        })
+        return expanded
+      })(),
+    }))
+  }
+
+  const updateSelectedStageRole = (role: string, enabled: boolean) => {
+    if (!selectedWorkflow || !selectedStage || !nextStage) return
+    const currentRoles = selectedTransitionGroup?.allowed_roles || []
+    const nextRoles = enabled
+      ? Array.from(new Set([...currentRoles, role]))
+      : currentRoles.filter((item) => item !== role)
+
+    if (selectedTransitionGroup) {
+      updateTransitionGroup(selectedTransitionGroup.key, { allowed_roles: nextRoles })
+      return
+    }
+
+    if (!enabled) return
+
     patchSelectedWorkflow((workflow) => ({
       ...workflow,
       transitions: [
         ...workflow.transitions,
         {
           id: -Date.now(),
-          from_stage: fromStage.id,
-          from_stage_name: fromStage.name,
-          to_stage: toStage.id,
-          to_stage_name: toStage.name,
-          allowed_role: "TASK_CREATOR",
+          from_stage: selectedStage.id,
+          from_stage_name: selectedStage.name,
+          from_stage_color: selectedStage.color || DEFAULT_STAGE_COLOR,
+          to_stage: nextStage.id,
+          to_stage_name: nextStage.name,
+          to_stage_color: nextStage.color || DEFAULT_STAGE_COLOR,
+          allowed_role: role,
         },
       ],
     }))
   }
 
-  const updateTransition = (
-    transitionId: number,
-    patch: Partial<WorkflowDefinition["transitions"][number]>
-  ) => {
-    if (!selectedWorkflow) return
-    patchSelectedWorkflow((workflow) => ({
-      ...workflow,
-      transitions: workflow.transitions.map((transition) => {
-        if (transition.id !== transitionId) return transition
-        const merged = { ...transition, ...patch }
-        const from = workflow.stages.find((stage) => stage.id === merged.from_stage)
-        const to = workflow.stages.find((stage) => stage.id === merged.to_stage)
-        return {
-          ...merged,
-          from_stage_name: from?.name || merged.from_stage_name,
-          to_stage_name: to?.name || merged.to_stage_name,
-        }
-      }),
-    }))
-  }
-
-  const removeTransition = (transitionId: number) => {
-    patchSelectedWorkflow((workflow) => ({
-      ...workflow,
-      transitions: workflow.transitions.filter((t) => t.id !== transitionId),
-    }))
-  }
-
   const parseErrorDetail = async (res: Response) => {
+    const raw = await res.text()
+    if (!raw) return null
     try {
-      const body = await res.json()
+      const body = JSON.parse(raw)
       return body
     } catch {
-      return null
+      return { detail: raw }
     }
+  }
+
+  const formatWorkflowError = (detail: unknown, fallback: string) => {
+    if (!detail) return fallback
+    if (typeof detail === "string") {
+      const text = detail.trim()
+      if (text.includes("uniq_stage_name_per_workflow")) {
+        return "Stage names must be unique within a workflow."
+      }
+      if (text.includes("uniq_status_name_per_workflow")) {
+        return "Status names must be unique within a workflow."
+      }
+      if (text.includes("uniq_stage_order_per_workflow")) {
+        return "Stage order conflict detected. Please retry saving."
+      }
+      const isHtml = /<\/?[a-z][\s\S]*>/i.test(text)
+      if (isHtml) {
+        const titleMatch = text.match(/<title>(.*?)<\/title>/i)
+        const title = titleMatch?.[1]?.trim()
+        if (title && title.toLowerCase() !== "server error (500)") {
+          return `Workflow save failed: ${title}`
+        }
+        return "Workflow save failed due to a server error. Please retry. If it keeps failing, check backend logs."
+      }
+      return text
+    }
+    if (typeof detail !== "object") return fallback
+
+    const payload = detail as {
+      detail?: string
+      blocked_stages?: Array<{ name: string; task_count: number }>
+      [key: string]: unknown
+    }
+
+    if (payload.blocked_stages?.length) {
+      const names = payload.blocked_stages
+        .map((stage) => `${stage.name} (${stage.task_count})`)
+        .join(", ")
+      return `Cannot delete stages with active tasks: ${names}`
+    }
+
+    if (payload.detail && String(payload.detail).trim()) {
+      return String(payload.detail)
+    }
+
+    const firstError = Object.values(payload).find((value) => {
+      if (typeof value === "string" && value.trim()) return true
+      if (Array.isArray(value) && value.length) return true
+      return false
+    })
+    if (Array.isArray(firstError)) return String(firstError[0] || fallback)
+    if (typeof firstError === "string") return firstError
+    return fallback
   }
 
   const saveDraft = async () => {
     if (!selectedWorkflow) return null
     setSaving(true)
     try {
+      const transitionPayload = Array.from(
+        new Map(
+          selectedWorkflow.transitions
+            .filter((transition) => transition.from_stage > 0 && transition.to_stage > 0)
+            .map((transition) => [
+              `${transition.from_stage}:${transition.to_stage}:${transition.allowed_role}`,
+              {
+                from_stage: transition.from_stage,
+                to_stage: transition.to_stage,
+                allowed_role: transition.allowed_role,
+              },
+            ])
+        ).values()
+      )
+
       const res = await apiFetch(`/api/workflows/${selectedWorkflow.id}/builder/`, {
         method: "PATCH",
         body: JSON.stringify({
           version: selectedWorkflow.version,
           name: selectedWorkflow.name,
+          statuses: (selectedWorkflow.statuses || []).map((status) => ({
+            id: status.id > 0 ? status.id : null,
+            name: status.name,
+            order: status.order,
+            is_terminal: status.is_terminal,
+            color: status.color || DEFAULT_STAGE_COLOR,
+          })),
+          transition_rules: (selectedWorkflow.transition_rules || [])
+            .map((rule) => ({
+              from_status: rule.from_status,
+              from_status_name: rule.from_status_name,
+              to_status: rule.to_status,
+              to_status_name: rule.to_status_name,
+              allowed_roles: (rule.allowed_roles || []).filter(Boolean),
+              proof_requirements: (rule.proof_requirements || []).map((req) => ({
+                type: req.type,
+                label: req.label,
+                is_mandatory: req.is_mandatory,
+              })),
+            })),
           stages: selectedWorkflow.stages.map((stage) => ({
             id: stage.id > 0 ? stage.id : null,
             name: stage.name,
             order: stage.order,
             is_terminal: stage.is_terminal,
             requires_attachments: stage.requires_attachments,
-            requires_approval: stage.requires_approval,
+            color: stage.color || DEFAULT_STAGE_COLOR,
           })),
-          transitions: selectedWorkflow.transitions
-            .filter((transition) => transition.from_stage > 0 && transition.to_stage > 0)
-            .map((transition) => ({
-              from_stage: transition.from_stage,
-              to_stage: transition.to_stage,
-              allowed_role: transition.allowed_role,
-            })),
+          transitions: transitionPayload,
         }),
       })
 
@@ -292,14 +577,7 @@ export default function WorkflowBuilderPage() {
 
       if (!res.ok) {
         const detail = await parseErrorDetail(res)
-        if (detail?.blocked_stages) {
-          const names = detail.blocked_stages
-            .map((stage: { name: string; task_count: number }) => `${stage.name} (${stage.task_count})`)
-            .join(", ")
-          alert(`Cannot delete stages with active tasks: ${names}`)
-        } else {
-          alert(detail?.detail || "Failed to save workflow draft.")
-        }
+        alert(formatWorkflowError(detail, "Failed to save workflow draft."))
         return null
       }
 
@@ -341,7 +619,7 @@ export default function WorkflowBuilderPage() {
 
       if (!res.ok) {
         const detail = await parseErrorDetail(res)
-        alert(detail?.detail || "Failed to publish workflow.")
+        alert(formatWorkflowError(detail, "Failed to publish workflow."))
         return
       }
 
@@ -367,7 +645,7 @@ export default function WorkflowBuilderPage() {
       })
       if (!res.ok) {
         const detail = await parseErrorDetail(res)
-        alert(detail?.detail || "Unable to create workflow.")
+        alert(formatWorkflowError(detail, "Unable to create workflow."))
         return
       }
       const created = (await res.json()) as WorkflowDefinition
@@ -402,7 +680,7 @@ export default function WorkflowBuilderPage() {
 
       if (!res.ok) {
         const detail = await parseErrorDetail(res)
-        alert(detail?.detail || "Unable to delete workflow.")
+        alert(formatWorkflowError(detail, "Unable to delete workflow."))
         return
       }
 
@@ -480,8 +758,8 @@ export default function WorkflowBuilderPage() {
       {loading ? (
         <div className="surface-card p-4 text-xs text-slate-500">Loading workflows...</div>
       ) : (
-        <div className="grid grid-cols-12 gap-3 lg:gap-4">
-          <section className="surface-card col-span-12 p-4 lg:col-span-8">
+        <div className="space-y-4">
+          <section className="surface-card p-4">
             <div className="mb-4">
               <p className="mb-2 text-xs text-slate-500">Workflow Name</p>
               {selectedWorkflow && (
@@ -517,53 +795,96 @@ export default function WorkflowBuilderPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <div className="flex min-w-max items-center gap-2">
-                  {selectedWorkflow.stages.map((stage, idx) => (
-                    <div
-                      key={stage.id}
-                      className="flex items-center gap-2"
-                      draggable
-                      onDragStart={() => setDraggingStageId(stage.id)}
-                      onDragEnd={() => setDraggingStageId(null)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (draggingStageId) moveStage(draggingStageId, stage.id)
-                      }}
-                    >
+                <div className="flex min-w-max items-center gap-3">
+                  {selectedWorkflow.stages.map((stage, idx) => {
+                    const next = selectedWorkflow.stages[idx + 1]
+                    const group = next
+                      ? transitionGroups.find(
+                          (item) =>
+                            item.from_stage === stage.id && item.to_stage === next.id
+                        )
+                      : null
+                    const roleSummary = group?.allowed_roles?.length
+                      ? group.allowed_roles.map(formatRoleLabel).join(", ")
+                      : "No roles"
+
+                    return (
                       <div
-                        onClick={() => setSelectedStageId(stage.id)}
-                        className={`w-48 rounded-lg border p-3 text-left transition ${
-                          selectedStageId === stage.id
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-neutral-200 bg-white text-slate-700 hover:bg-neutral-50"
-                        }`}
+                        key={stage.id}
+                        className="flex items-center gap-3"
+                        draggable
+                        onDragStart={() => setDraggingStageId(stage.id)}
+                        onDragEnd={() => setDraggingStageId(null)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (draggingStageId) moveStage(draggingStageId, stage.id)
+                        }}
                       >
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 text-[11px]">
-                            <GripVertical size={11} />
-                            Drag
-                          </span>
+                        <button
+                          onClick={() => setSelectedStageId(stage.id)}
+                          className={`h-44 w-60 rounded-xl border p-3 text-left transition ${
+                            selectedStageId === stage.id
+                              ? ""
+                              : "border-neutral-200 bg-white hover:bg-neutral-50"
+                          }`}
+                          style={
+                            selectedStageId === stage.id
+                              ? {
+                                  borderColor: stage.color || DEFAULT_STAGE_COLOR,
+                                  backgroundColor: `${stage.color || DEFAULT_STAGE_COLOR}14`,
+                                }
+                              : undefined
+                          }
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                              <GripVertical size={11} />
+                              Drag
+                            </span>
+                            <span
+                              className="inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                              style={{
+                                color: stage.color || DEFAULT_STAGE_COLOR,
+                                borderColor: `${stage.color || DEFAULT_STAGE_COLOR}66`,
+                                backgroundColor: `${stage.color || DEFAULT_STAGE_COLOR}1A`,
+                              }}
+                            >
+                              {stage.name}
+                            </span>
+                          </div>
+                          <p className="line-clamp-2 min-h-[32px] text-[11px] text-slate-600">
+                            Roles: {roleSummary}
+                          </p>
+                          <p className="mt-1 min-h-[16px] text-[11px] text-slate-600">
+                            {stage.requires_attachments
+                              ? "Attachment required"
+                              : "No requirements"}
+                          </p>
+                          <p
+                            className={`mt-1 min-h-[16px] text-[11px] font-medium ${
+                              stage.is_terminal ? "text-emerald-700" : "text-transparent"
+                            }`}
+                          >
+                            Terminal stage
+                          </p>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               deleteStage(stage.id)
                             }}
-                            className="rounded p-0.5 hover:bg-black/10"
-                            title="Delete stage"
+                            className="mt-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 transition hover:bg-red-50"
+                            title="Remove stage"
+                            aria-label="Remove stage"
                           >
-                            <Trash2 size={11} />
+                            <Trash2 size={10} />
                           </button>
-                        </div>
-                        <p className="font-medium text-xs">{stage.name}</p>
-                        <p className="mt-1 text-[11px] opacity-80">
-                          {stage.is_terminal ? "Terminal" : "Active"} • Order {stage.order + 1}
-                        </p>
+                        </button>
+                        {idx < selectedWorkflow.stages.length - 1 && (
+                          <span className="text-slate-400">→</span>
+                        )}
                       </div>
-                      {idx < selectedWorkflow.stages.length - 1 && (
-                        <span className="text-slate-400">→</span>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
 
                   <button
                     onClick={() => {
@@ -579,180 +900,244 @@ export default function WorkflowBuilderPage() {
                             order: wf.stages.length,
                             is_terminal: false,
                             requires_attachments: false,
-                            requires_approval: false,
+                            color: DEFAULT_STAGE_COLOR,
                           },
                         ],
                       }))
                       setSelectedStageId(nextId)
                     }}
-                    className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-neutral-300 text-slate-400 hover:bg-neutral-50"
+                    className="flex h-[152px] w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-neutral-300 text-slate-500 hover:bg-neutral-50"
+                    title="Add Stage"
                   >
-                    <Plus size={14} />
+                    <Plus size={18} />
                   </button>
                 </div>
               </div>
             )}
           </section>
 
-          <aside className="surface-card col-span-12 p-4 lg:col-span-4">
-            <h2 className="section-title">Stage Configuration</h2>
+          <section className="surface-card p-4">
             {!selectedStage || !selectedWorkflow ? (
-              <p className="mt-2 text-xs text-slate-500">Select a stage to configure it.</p>
+              <p className="text-xs text-slate-500">Select a stage to configure it.</p>
             ) : (
-              <div className="mt-3 space-y-3 text-xs">
-                <Field label="Stage Name">
-                  <input
-                    value={selectedStage.name}
-                    onChange={(e) =>
-                      patchSelectedWorkflow((wf) => ({
-                        ...wf,
-                        stages: wf.stages.map((stage) =>
-                          stage.id === selectedStage.id
-                            ? { ...stage, name: e.target.value }
-                            : stage
-                        ),
-                      }))
-                    }
-                    className="w-full rounded-lg border border-neutral-200 px-3 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-slate-300"
-                  />
-                </Field>
-
-                <Field label="Is terminal?">
-                  <button
-                    onClick={() =>
-                      patchSelectedWorkflow((wf) => ({
-                        ...wf,
-                        stages: wf.stages.map((stage) =>
-                          stage.id === selectedStage.id
-                            ? { ...stage, is_terminal: !stage.is_terminal }
-                            : stage
-                        ),
-                      }))
-                    }
-                    className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-slate-600"
-                  >
-                    {selectedStage.is_terminal ? "Yes" : "No"}
-                  </button>
-                </Field>
-
-                <Field label="Requires attachments?">
-                  <button
-                    onClick={() =>
-                      patchSelectedWorkflow((wf) => ({
-                        ...wf,
-                        stages: wf.stages.map((stage) =>
-                          stage.id === selectedStage.id
-                            ? { ...stage, requires_attachments: !stage.requires_attachments }
-                            : stage
-                        ),
-                      }))
-                    }
-                    className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-slate-600"
-                  >
-                    {selectedStage.requires_attachments ? "Yes" : "No"}
-                  </button>
-                </Field>
-
-                <Field label="Requires approval?">
-                  <button
-                    onClick={() =>
-                      patchSelectedWorkflow((wf) => ({
-                        ...wf,
-                        stages: wf.stages.map((stage) =>
-                          stage.id === selectedStage.id
-                            ? { ...stage, requires_approval: !stage.requires_approval }
-                            : stage
-                        ),
-                      }))
-                    }
-                    className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-slate-600"
-                  >
-                    {selectedStage.requires_approval ? "Yes" : "No"}
-                  </button>
-                </Field>
-
-                <Field label="Transitions">
-                  <div className="space-y-2">
-                    {selectedWorkflow.transitions.map((transition) => (
-                      <div
-                        key={transition.id}
-                        className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-1 rounded-lg border border-neutral-200 p-1.5"
-                      >
-                        <select
-                          value={transition.from_stage}
-                          onChange={(e) =>
-                            updateTransition(transition.id, {
-                              from_stage: Number(e.target.value),
-                            })
-                          }
-                          className="rounded border border-neutral-200 px-1.5 py-1 text-[11px]"
-                        >
-                          {selectedWorkflow.stages.map((stage) => (
-                            <option key={`from-${stage.id}`} value={stage.id}>
-                              {stage.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={transition.to_stage}
-                          onChange={(e) =>
-                            updateTransition(transition.id, {
-                              to_stage: Number(e.target.value),
-                            })
-                          }
-                          className="rounded border border-neutral-200 px-1.5 py-1 text-[11px]"
-                        >
-                          {selectedWorkflow.stages.map((stage) => (
-                            <option key={`to-${stage.id}`} value={stage.id}>
-                              {stage.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={transition.allowed_role}
-                          onChange={(e) =>
-                            updateTransition(transition.id, {
-                              allowed_role: e.target.value,
-                            })
-                          }
-                          className="rounded border border-neutral-200 px-1.5 py-1 text-[11px]"
-                        >
-                          {ROLE_OPTIONS.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => removeTransition(transition.id)}
-                          className="rounded border border-red-200 px-2 py-1 text-[11px] text-red-600"
-                        >
-                          Del
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={addTransition}
-                      className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-slate-600"
-                    >
-                      + Add Transition
-                    </button>
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">
+                      Configure Stage: {selectedStage.name}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Set permissions, colors, and movement requirements for this stage.
+                    </p>
                   </div>
-                </Field>
+                  <button
+                    onClick={() => setSelectedStageId(null)}
+                    className="rounded-md border border-neutral-200 p-1 text-slate-500 hover:bg-neutral-50"
+                    title="Close stage configuration"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-700">Stage Name</p>
+                    <input
+                      value={selectedStage.name}
+                      onChange={(e) =>
+                        patchSelectedWorkflow((wf) => ({
+                          ...wf,
+                          stages: wf.stages.map((stage) =>
+                            stage.id === selectedStage.id
+                              ? { ...stage, name: e.target.value }
+                              : stage
+                          ),
+                        }))
+                      }
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-700">Stage Color</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          if (!/^#[0-9A-F]{6}$/.test(customStageColor)) return
+                          patchSelectedWorkflow((wf) => ({
+                            ...wf,
+                            stages: wf.stages.map((stage) =>
+                              stage.id === selectedStage.id
+                                ? { ...stage, color: customStageColor }
+                                : stage
+                            ),
+                            statuses: (wf.statuses || []).map((status) =>
+                              status.name === selectedStage.name
+                                ? { ...status, color: customStageColor }
+                                : status
+                            ),
+                          }))
+                        }}
+                        className={`inline-flex h-7 min-w-[96px] items-center justify-center rounded-full border px-2 text-[11px] font-medium ${
+                          (selectedStage.color || DEFAULT_STAGE_COLOR) === customStageColor
+                            ? "border-slate-700 bg-slate-700 text-white"
+                            : "border-neutral-300 bg-white text-slate-700 hover:bg-neutral-50"
+                        }`}
+                        title="Use custom hex color"
+                      >
+                        Custom
+                      </button>
+                      {STAGE_PRESET_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() =>
+                            patchSelectedWorkflow((wf) => ({
+                              ...wf,
+                              stages: wf.stages.map((stage) =>
+                                stage.id === selectedStage.id ? { ...stage, color } : stage
+                              ),
+                              statuses: (wf.statuses || []).map((status) =>
+                                status.name === selectedStage.name ? { ...status, color } : status
+                              ),
+                            }))
+                          }
+                          className={`h-7 w-7 rounded-full border ${
+                            (selectedStage.color || DEFAULT_STAGE_COLOR) === color
+                              ? "ring-2 ring-slate-700 ring-offset-2"
+                              : ""
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={customStageColor}
+                        onChange={(e) => setCustomStageColor(e.target.value.toUpperCase())}
+                        placeholder="#3B82F6"
+                        className="w-36 rounded-lg border border-neutral-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!/^#[0-9A-F]{6}$/.test(customStageColor)) return
+                          patchSelectedWorkflow((wf) => ({
+                            ...wf,
+                            stages: wf.stages.map((stage) =>
+                              stage.id === selectedStage.id
+                                ? { ...stage, color: customStageColor }
+                                : stage
+                            ),
+                            statuses: (wf.statuses || []).map((status) =>
+                              status.name === selectedStage.name
+                                ? { ...status, color: customStageColor }
+                                : status
+                            ),
+                          }))
+                        }}
+                        className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-neutral-50"
+                      >
+                        Apply Custom
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-2 rounded-xl border border-neutral-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-slate-800">Terminal Stage</p>
+                      <button
+                        onClick={() =>
+                          patchSelectedWorkflow((wf) => ({
+                            ...wf,
+                            stages: wf.stages.map((stage) =>
+                              stage.id === selectedStage.id
+                                ? { ...stage, is_terminal: !stage.is_terminal }
+                                : stage
+                            ),
+                          }))
+                        }
+                        className={`rounded-full px-3 py-1 text-[11px] ${
+                          selectedStage.is_terminal
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-neutral-100 text-neutral-600"
+                        }`}
+                      >
+                        {selectedStage.is_terminal ? "On" : "Off"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Mark this stage as final. Terminal tasks do not move forward.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-neutral-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-slate-800">Require Attachments</p>
+                      <button
+                        onClick={() =>
+                          patchSelectedWorkflow((wf) => ({
+                            ...wf,
+                            stages: wf.stages.map((stage) =>
+                              stage.id === selectedStage.id
+                                ? { ...stage, requires_attachments: !stage.requires_attachments }
+                                : stage
+                            ),
+                          }))
+                        }
+                        className={`rounded-full px-3 py-1 text-[11px] ${
+                          selectedStage.requires_attachments
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-neutral-100 text-neutral-600"
+                        }`}
+                      >
+                        {selectedStage.requires_attachments ? "On" : "Off"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Tasks must include required files before moving out of this stage.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-xl border border-neutral-200 p-3">
+                  <p className="text-sm font-medium text-slate-800">Allowed Roles for Next Transition</p>
+                  {nextStage ? (
+                    <>
+                      <p className="text-xs text-slate-500">
+                        Controls who can move tasks from <strong>{selectedStage.name}</strong> to <strong>{nextStage.name}</strong>.
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {ROLE_OPTIONS.map((role) => {
+                          const checked = (selectedTransitionGroup?.allowed_roles || []).includes(role)
+                          return (
+                            <label
+                              key={role}
+                              className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-xs text-slate-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => updateSelectedStageRole(role, e.target.checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                              {formatRoleLabel(role)}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      This is the last stage. No outgoing transition.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
-          </aside>
+          </section>
         </div>
       )}
     </WorkspaceShell>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      {children}
-    </div>
   )
 }

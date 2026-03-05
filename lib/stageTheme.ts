@@ -7,6 +7,22 @@ const stagePalette = [
   "bg-violet-100 text-violet-700 border-violet-200",
 ]
 
+export function normalizeHexColor(value: string | null | undefined) {
+  if (!value) return null
+  const normalized = value.trim()
+  if (/^#[0-9A-Fa-f]{6}$/.test(normalized)) return normalized.toUpperCase()
+  return null
+}
+
+function hexToRgb(hex: string) {
+  const normalized = normalizeHexColor(hex)
+  if (!normalized) return null
+  const r = Number.parseInt(normalized.slice(1, 3), 16)
+  const g = Number.parseInt(normalized.slice(3, 5), 16)
+  const b = Number.parseInt(normalized.slice(5, 7), 16)
+  return { r, g, b }
+}
+
 function hashString(input: string) {
   let hash = 0
   for (let i = 0; i < input.length; i += 1) {
@@ -27,8 +43,17 @@ export function stageTone(
   return stagePalette[idx]
 }
 
+export function stageToneStyle(color: string | null | undefined) {
+  const rgb = color ? hexToRgb(color) : null
+  if (!rgb) return undefined
+  return {
+    backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.12)`,
+    borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
+    color: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+  }
+}
+
 export function formatStageName(value: string | null | undefined) {
   if (!value) return "—"
   return value.replaceAll("_", " ").trim()
 }
-

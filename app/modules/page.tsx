@@ -1,7 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import WorkspaceShell from "@/components/layout/WorkspaceShell"
+import { useAuth } from "@/context/AuthContext"
 
 const initialModules = [
   {
@@ -37,7 +40,17 @@ const initialModules = [
 ]
 
 export default function ModulesPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user } = useAuth()
   const [modules, setModules] = useState(initialModules)
+
+  useEffect(() => {
+    if (!user?.tenant_slug) return
+    if (pathname === "/modules") {
+      router.replace(`/${user.tenant_slug}/modules`)
+    }
+  }, [pathname, router, user?.tenant_slug])
 
   return (
     <WorkspaceShell
@@ -80,4 +93,3 @@ export default function ModulesPage() {
     </WorkspaceShell>
   )
 }
-

@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutGrid,
   Rows3,
-  Save,
   Plus,
   Search,
   Filter,
@@ -18,9 +18,22 @@ import { useTasks } from "@/app/dashboard/useTasks"
 import { apiFetchJson } from "@/lib/api"
 import { Task } from "@/types/task"
 import { useAuth } from "@/context/AuthContext"
+import { useSearchParams } from "next/navigation"
 
-export default function TasksPage() {
+type TasksPageProps = {
+  divisionSlugOverride?: string | null
+}
+
+export default function TasksPage({ divisionSlugOverride = null }: TasksPageProps = {}) {
+  const searchParams = useSearchParams()
+  const boardFilterId = Number(searchParams.get("board") || "") || null
+  const divisionFilterSlug = divisionSlugOverride || searchParams.get("division")
+  const openCreateFromQuery = searchParams.get("create") === "1"
   const { activeRole, user } = useAuth()
+  const router = useRouter()
+  const pathname = usePathname()
+  const [isCreatingTask, setIsCreatingTask] = useState(false)
+  const [subtaskParent, setSubtaskParent] = useState<Task | null>(null)
   const [showTerminal, setShowTerminal] = useState(false)
   const {
     tasks,
@@ -37,13 +50,13 @@ export default function TasksPage() {
     count,
     setCurrentPage,
     reload,
-  } = useTasks(showTerminal)
+  } = useTasks(showTerminal, boardFilterId, divisionFilterSlug)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [view, setView] = useState<"table" | "board">("table")
   const [query, setQuery] = useState("")
   const [stageFilter, setStageFilter] = useState("ALL")
   const [priorityFilter, setPriorityFilter] = useState("ALL")
-  const [groupBy, setGroupBy] = useState<"stage" | "priority" | "assignee">("stage")
+  const [groupBy, setGroupBy] = useState<"none" | "stage" | "priority" | "assignee">("none")
   const [sortBy, setSortBy] = useState<"due" | "title" | "priority" | "status">("due")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [showFilterMenu, setShowFilterMenu] = useState(false)
@@ -52,10 +65,18 @@ export default function TasksPage() {
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false)
   const currentUserId = user?.id ?? null
 
+  useEffect(() => {
+    if (!user?.tenant_slug) return
+    if (pathname === "/tasks") {
+      router.replace(`/${user.tenant_slug}/tasks`)
+    }
+  }, [pathname, router, user?.tenant_slug])
+
   const assignmentColumn = useMemo(
     () => (activeRole === "TASK_RECEIVER" ? "Assigned By" : "Assigned To"),
     [activeRole]
   )
+  const groupByAssignmentLabel = activeRole === "TASK_RECEIVER" ? "Group by Assigner" : "Group by Assignee"
 
   const toggleSelection = (taskId: number) => {
     setSelectedIds((prev) =>
@@ -66,20 +87,19 @@ export default function TasksPage() {
   }
 
   const openCreateTask = () => {
-    setFullViewTask({
-      id: 0,
-      title: "",
-      description: "",
-      status: "NOT_STARTED",
-      priority: null,
-      due_date: null,
-      assigned_to: null,
-      version: 0,
-      created_at: "",
-      updated_at: "",
-      attachments: [],
-    })
+    setSelectedTask(null)
+    setFullViewTask(null)
+    setSubtaskParent(null)
+    setIsCreatingTask(true)
   }
+
+  useEffect(() => {
+    if (!openCreateFromQuery) return
+    setSelectedTask(null)
+    setFullViewTask(null)
+    setSubtaskParent(null)
+    setIsCreatingTask(true)
+  }, [openCreateFromQuery, setSelectedTask, setFullViewTask])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -91,7 +111,7 @@ export default function TasksPage() {
           query: string
           stageFilter: string
           priorityFilter: string
-          groupBy: "stage" | "priority" | "assignee"
+          groupBy: "none" | "stage" | "priority" | "assignee"
           sortBy: "due" | "title" | "priority" | "status"
           sortDir?: "asc" | "desc"
           view: "table" | "board"
@@ -103,7 +123,7 @@ export default function TasksPage() {
         setQuery(parsed.query || "")
         setStageFilter(parsed.stageFilter || "ALL")
         setPriorityFilter(parsed.priorityFilter || "ALL")
-        setGroupBy(parsed.groupBy || "stage")
+        setGroupBy(parsed.groupBy || "none")
         setSortBy(parsed.sortBy || "due")
         setSortDir(parsed.sortDir || "asc")
         setView(parsed.view || "table")
@@ -118,26 +138,6 @@ export default function TasksPage() {
 
     return () => window.clearTimeout(timeout)
   }, [])
-
-  const saveView = () => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(
-      "workos_tasks_view",
-      JSON.stringify({
-        query,
-        stageFilter,
-        priorityFilter,
-        groupBy,
-        sortBy,
-        sortDir,
-        view,
-        showTerminal,
-        overdueOnly,
-        unassignedOnly,
-        assignedToMeOnly,
-      })
-    )
-  }
 
   const stageOptions = useMemo(() => {
     const set = new Set<string>()
@@ -232,21 +232,27 @@ export default function TasksPage() {
   const groupBuckets = useMemo(() => {
     const buckets: Record<string, Task[]> = {}
     for (const task of filteredTasks) {
-      let key = "Unassigned"
+      let key = "All tasks"
       if (groupBy === "stage") {
         key = task.stage?.name || task.status
       } else if (groupBy === "priority") {
         key = task.priority || "None"
-      } else {
-        key =
-          (task.assigned_to?.full_name || task.assigned_to?.email || "").trim() ||
-          "Unassigned"
+      } else if (groupBy === "assignee") {
+        if (activeRole === "TASK_RECEIVER") {
+          key =
+            (task.created_by?.full_name || task.created_by?.email || "").trim() ||
+            "Unassigned"
+        } else {
+          key =
+            (task.assigned_to?.full_name || task.assigned_to?.email || "").trim() ||
+            "Unassigned"
+        }
       }
       if (!buckets[key]) buckets[key] = []
       buckets[key].push(task)
     }
     return buckets
-  }, [filteredTasks, groupBy])
+  }, [filteredTasks, groupBy, activeRole])
 
   useEffect(() => {
     if (!selectedTask || showTerminal) return
@@ -264,27 +270,39 @@ export default function TasksPage() {
 
   return (
     <WorkspaceShell
-      title="Task Engine"
-      subtitle="List view with role-aware workflow execution and configurable grouping."
+      title={divisionFilterSlug ? `${divisionFilterSlug} Task Engine` : "Task Engine"}
+      subtitle={
+        divisionFilterSlug
+          ? "Division-focused task engine with boards, tasks, and subtasks."
+          : "List view with role-aware workflow execution and configurable grouping."
+      }
       actions={
         <button
           onClick={openCreateTask}
           className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-700"
         >
           <Plus size={12} />
-          New Task
+          New Workflow Task
         </button>
       }
     >
-      {fullViewTask ? (
+      {fullViewTask || isCreatingTask ? (
         <div className="surface-card p-4 lg:p-6">
           <TaskFullView
             task={fullViewTask}
-            mode={fullViewTask.id ? "edit" : "create"}
-            onClose={() => setFullViewTask(null)}
+            mode={fullViewTask?.id ? "edit" : "create"}
+            parentTask={isCreatingTask ? subtaskParent : null}
+            initialBoardId={boardFilterId}
+            onClose={() => {
+              setFullViewTask(null)
+              setIsCreatingTask(false)
+              setSubtaskParent(null)
+            }}
             onSaved={(savedTask) => {
               updateTaskInState(savedTask)
               setFullViewTask(null)
+              setIsCreatingTask(false)
+              setSubtaskParent(null)
             }}
           />
         </div>
@@ -313,9 +331,10 @@ export default function TasksPage() {
                 onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
                 className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs text-slate-600"
               >
-                <option value="stage">Group: Stage</option>
-                <option value="priority">Group: Priority</option>
-                <option value="assignee">Group: Assignee</option>
+                <option value="none">No Grouping</option>
+                <option value="stage">Group by Stage</option>
+                <option value="priority">Group by Priority</option>
+                <option value="assignee">{groupByAssignmentLabel}</option>
               </select>
               <select
                 value={sortBy}
@@ -344,13 +363,6 @@ export default function TasksPage() {
               >
                 <ArrowUpDown size={12} />
                 {sortDir === "asc" ? "Asc" : "Desc"}
-              </button>
-              <button
-                onClick={saveView}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:bg-neutral-50"
-              >
-                <Save size={12} />
-                Save View
               </button>
               <button
                 onClick={() => setShowTerminal((prev) => !prev)}
@@ -435,20 +447,56 @@ export default function TasksPage() {
             ) : null}
 
             {view === "table" ? (
-              <TaskTable
-                tasks={filteredTasks}
-                loading={loading}
-                role={activeRole}
-                assignmentColumn={assignmentColumn}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                count={count}
-                onPageChange={setCurrentPage}
-                onClickTask={toggleDrawer}
-                onDoubleClickTask={setFullViewTask}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelection}
-              />
+              groupBy === "none" ? (
+                <TaskTable
+                  tasks={filteredTasks}
+                  loading={loading}
+                  role={activeRole}
+                  assignmentColumn={assignmentColumn}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  count={count}
+                  onPageChange={setCurrentPage}
+                  onClickTask={toggleDrawer}
+                  onDoubleClickTask={setFullViewTask}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelection}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(groupBuckets).map(([bucket, bucketTasks]) => (
+                    <section key={bucket} className="space-y-2">
+                      <div className="flex items-baseline gap-2 px-1">
+                        <h3 className="text-sm font-semibold text-slate-900">
+                          {bucket.replaceAll("_", " ")}
+                        </h3>
+                        <span className="text-xs text-slate-500">
+                          {bucketTasks.length} task{bucketTasks.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <TaskTable
+                        tasks={bucketTasks}
+                        loading={loading}
+                        role={activeRole}
+                        assignmentColumn={assignmentColumn}
+                        currentPage={1}
+                        totalPages={1}
+                        count={bucketTasks.length}
+                        onPageChange={() => {}}
+                        onClickTask={toggleDrawer}
+                        onDoubleClickTask={setFullViewTask}
+                        selectedIds={selectedIds}
+                        onToggleSelect={toggleSelection}
+                      />
+                    </section>
+                  ))}
+                  {!Object.keys(groupBuckets).length && (
+                    <div className="surface-card p-5 text-sm text-slate-500">
+                      No tasks for current filters.
+                    </div>
+                  )}
+                </div>
+              )
             ) : (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                 {Object.entries(groupBuckets).map(([bucket, bucketTasks]) => (
@@ -497,6 +545,12 @@ export default function TasksPage() {
                 task={selectedTask}
                 updateTaskInState={updateTaskInState}
                 onClose={() => setSelectedTask(null)}
+                onCreateSubtask={(parentTask) => {
+                  setSelectedTask(null)
+                  setFullViewTask(null)
+                  setSubtaskParent(parentTask)
+                  setIsCreatingTask(true)
+                }}
                 onEdit={async (taskId) => {
                   const fullTask = await apiFetchJson<Task>(`/api/tasks/${taskId}/`)
                   setSelectedTask(null)
