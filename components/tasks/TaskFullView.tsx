@@ -7,7 +7,7 @@ import TaskTitleDescription from "./TaskTitleDescription"
 import TaskMetaFields from "./TaskMetaFields"
 
 import { useEffect, useState } from "react"
-import { Task, TaskAttachment, TaskPriority } from "@/types/task"
+import { Task, TaskAttachment, TaskPriority, UserProjection } from "@/types/task"
 import { apiFetch, apiFetchJson } from "@/lib/api"
 import { useAuth } from "@/context/AuthContext"
 import { Role, TaskStatus } from "@/lib/statusConfig"
@@ -55,9 +55,16 @@ export default function TaskFullView({
   const isCreate = mode === "create"
   const initialBoardId = task?.board ?? parentTask?.board ?? initialBoardIdProp ?? null
   const { activeRole } = useAuth()
+  const getAssigneeIdsFromTask = (source?: Task | null) => {
+    const ids =
+      source?.assignees?.map((user) => user.id) ||
+      (source?.assigned_to?.id ? [source.assigned_to.id] : [])
+    return Array.from(new Set(ids)).sort((a, b) => a - b)
+  }
   const isTerminal =
     task?.stage?.is_terminal ??
-    (task?.status === "DONE" || task?.status === "CANCELLED")
+    task?.status_detail?.is_terminal ??
+    false
 
   const [title, setTitle] = useState(task?.title || "")
   const [description, setDescription] = useState(task?.description || "")
@@ -73,11 +80,11 @@ export default function TaskFullView({
     task?.due_date ? task.due_date.slice(11, 16) : ""
   )
 
-  const [assigneeIds, setAssigneeIds] = useState<number[]>(
+  const [assignees, setAssignees] = useState<UserProjection[]>(
     task?.assignees?.length
-      ? task.assignees.map((user) => user.id)
-      : task?.assigned_to?.id
-      ? [task.assigned_to.id]
+      ? task.assignees
+      : task?.assigned_to
+      ? [task.assigned_to]
       : []
   )
 
@@ -112,11 +119,11 @@ export default function TaskFullView({
 
 const original = task
 
-const hasChanges = isCreate
+  const hasChanges = isCreate
   ? title.trim() !== "" ||
     description.trim() !== "" ||
     priority !== "" ||
-    assigneeIds.length > 0 ||
+    assignees.length > 0 ||
     selectedBoardId !== null ||
     selectedWorkflowId !== null ||
     selectedParentTaskId !== null ||
@@ -126,8 +133,8 @@ const hasChanges = isCreate
       title !== original?.title ||
       description !== original?.description ||
       priority !== original?.priority ||
-      JSON.stringify([...assigneeIds].sort((a, b) => a - b)) !==
-        JSON.stringify([...(original?.assignees?.map((user) => user.id) || (original?.assigned_to?.id ? [original.assigned_to.id] : []))].sort((a, b) => a - b)) ||
+      JSON.stringify(Array.from(new Set(assignees.map((user) => user.id))).sort((a, b) => a - b)) !==
+        JSON.stringify(getAssigneeIdsFromTask(original)) ||
       selectedWorkflowId !== (original?.workflow?.id ?? null) ||
       selectedStageId !== (original?.stage?.id ?? null) ||
       dueDate !== original?.due_date?.slice(0, 10) ||
@@ -189,7 +196,7 @@ const hasChanges = isCreate
   }, [initialBoardId, isCreate, task?.workflow?.id])
 
   const handleSave = async () => {
-    if (!title || !priority || assigneeIds.length === 0 || !dueDate || !selectedBoardId) {
+    if (!title || !priority || assignees.length === 0 || !dueDate || !selectedBoardId) {
       alert("Please fill all required fields.")
       return
     }
@@ -209,7 +216,9 @@ const hasChanges = isCreate
 
       formData.append("title", title)
       formData.append("description", description)
-      assigneeIds.forEach((id) => formData.append("assignee_ids", String(id)))
+      Array.from(new Set(assignees.map((user) => user.id))).forEach((id) =>
+        formData.append("assignee_ids", String(id))
+      )
       formData.append("priority", priority)
       formData.append("board", String(selectedBoardId))
       formData.append("due_date", formattedDueDate)
@@ -302,8 +311,8 @@ const hasChanges = isCreate
           description === task?.description &&
           priority === task?.priority &&
           dueDate === task?.due_date?.slice(0, 10) &&
-          JSON.stringify([...assigneeIds].sort((a, b) => a - b)) ===
-            JSON.stringify([...(task?.assignees?.map((user) => user.id) || (task?.assigned_to?.id ? [task.assigned_to.id] : []))].sort((a, b) => a - b)) &&
+          JSON.stringify(Array.from(new Set(assignees.map((user) => user.id))).sort((a, b) => a - b)) ===
+            JSON.stringify(getAssigneeIdsFromTask(task)) &&
           selectedWorkflowId === (task?.workflow?.id ?? null) &&
           selectedStageId === (task?.stage?.id ?? null) &&
           dueTime === task?.due_date?.slice(11, 16)
@@ -554,8 +563,8 @@ const hasChanges = isCreate
             setDueDate={setDueDate}
             dueTime={dueTime}
             setDueTime={setDueTime}
-            assigneeIds={assigneeIds}
-            setAssigneeIds={setAssigneeIds}
+            assignees={assignees}
+            setAssignees={setAssignees}
           />
         </div>
 

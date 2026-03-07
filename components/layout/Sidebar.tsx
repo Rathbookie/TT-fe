@@ -17,6 +17,8 @@ import {
   ChevronsRight,
   LogOut,
   MoreHorizontal,
+  Settings,
+  Users,
 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { apiFetch, apiFetchJson } from "@/lib/api"
@@ -89,8 +91,10 @@ export default function Sidebar() {
   const orgHref = (path: string) => `${orgBase}${path}`
 
   const topItems = [
+    { href: orgHref("/org-view"), match: "/org-view", label: "Org View", icon: <Users size={14} /> },
     { href: orgHref("/workflows"), match: "/workflows", label: "Workflows", icon: <Network size={14} /> },
     { href: orgHref("/modules"), match: "/modules", label: "Modules", icon: <Package size={14} /> },
+    { href: orgHref("/settings"), match: "/settings", label: "Settings", icon: <Settings size={14} /> },
     { href: "/onboarding", match: "/onboarding", label: "Templates", icon: <Star size={14} /> },
   ]
 

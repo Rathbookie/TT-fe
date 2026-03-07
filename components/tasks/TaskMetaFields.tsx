@@ -2,7 +2,7 @@
 
 import { TaskPriority, UserProjection } from "@/types/task"
 import { apiFetchJson } from "@/lib/api"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 type Props = {
   isTerminal: boolean
@@ -12,8 +12,8 @@ type Props = {
   setDueDate: (v: string) => void
   dueTime: string
   setDueTime: (v: string) => void
-  assigneeIds: number[]
-  setAssigneeIds: (v: number[]) => void
+  assignees: UserProjection[]
+  setAssignees: (v: UserProjection[]) => void
 }
 
 export default function TaskMetaFields({
@@ -24,8 +24,8 @@ export default function TaskMetaFields({
   setDueDate,
   dueTime,
   setDueTime,
-  assigneeIds,
-  setAssigneeIds,
+  assignees,
+  setAssignees,
 }: Props) {
   const [userSearch, setUserSearch] = useState("")
   const [userResults, setUserResults] = useState<UserProjection[]>([])
@@ -47,6 +47,13 @@ export default function TaskMetaFields({
     }
   }
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchUsers(userSearch)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [userSearch])
+
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* Assign To */}
@@ -56,10 +63,7 @@ export default function TaskMetaFields({
         <input
           disabled={isTerminal}
           value={userSearch}
-          onChange={(e) => {
-            setUserSearch(e.target.value)
-            fetchUsers(e.target.value)
-          }}
+          onChange={(e) => setUserSearch(e.target.value)}
           placeholder="Search for user"
           className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
         />
@@ -70,28 +74,31 @@ export default function TaskMetaFields({
               <div
                 key={u.id}
                 onClick={() => {
-                  if (!assigneeIds.includes(u.id)) {
-                    setAssigneeIds([...assigneeIds, u.id])
+                  if (!assignees.some((item) => item.id === u.id)) {
+                    setAssignees([...assignees, u])
                   }
                   setUserSearch("")
                   setUserResults([])
                 }}
                 className="px-3 py-1.5 hover:bg-neutral-100 cursor-pointer text-xs"
               >
-                {u.full_name}
+                <div className="font-medium text-neutral-800">{u.full_name || u.email}</div>
+                <div className="text-[11px] text-neutral-500">{u.email}</div>
               </div>
             ))}
           </div>
         )}
-        {assigneeIds.length > 0 && (
+        {assignees.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {assigneeIds.map((id) => (
+            {assignees.map((assignee) => (
               <button
-                key={id}
-                onClick={() => setAssigneeIds(assigneeIds.filter((item) => item !== id))}
+                key={assignee.id}
+                onClick={() =>
+                  setAssignees(assignees.filter((item) => item.id !== assignee.id))
+                }
                 className="rounded border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-slate-600"
               >
-                User #{id} ×
+                {(assignee.full_name || assignee.email || "Unknown User").trim()} ×
               </button>
             ))}
           </div>

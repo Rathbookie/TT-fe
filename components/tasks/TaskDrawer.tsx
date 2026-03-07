@@ -46,7 +46,6 @@ export default function TaskDrawer({
   const [selectedStageId, setSelectedStageId] = useState<number | null>(task?.stage?.id ?? null)
   const [blockedReason, setBlockedReason] = useState("")
   const [loading, setLoading] = useState(false)
-  const { user } = useAuth()
 
   /* ----------------- */
   /* Fetch History */
@@ -94,7 +93,8 @@ export default function TaskDrawer({
   if (!activeRole) return null
   const isTerminal =
     task.stage?.is_terminal ??
-    (task.status === "DONE" || task.status === "CANCELLED")
+    task.status_detail?.is_terminal ??
+    false
 
   const displayUser = (user?: Task["created_by"] | Task["assigned_to"]) => {
     if (!user) return "—"
@@ -104,7 +104,14 @@ export default function TaskDrawer({
   const isOverdue =
     task.due_date &&
     new Date(task.due_date) < new Date() &&
-    !(task.stage?.is_terminal ?? task.status === "DONE")
+    !isTerminal
+
+  const assigneeDisplayList =
+    task.assignees?.length
+      ? task.assignees
+      : task.assigned_to
+      ? [task.assigned_to]
+      : []
 
   const formatDate = (date: string) =>
     new Date(date).toLocaleString()
@@ -283,7 +290,8 @@ export default function TaskDrawer({
         </div>
 
         {activeRole === "TASK_RECEIVER" &&
-          task.status === "IN_PROGRESS" && (
+          !isTerminal &&
+          !task.status_detail?.is_cancelled && (
             <ReceiverProgressUpload
               task={task}
               onStatusChange={(updatedTask) => {
@@ -301,9 +309,9 @@ export default function TaskDrawer({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onEdit(task.id)}
-              disabled={task.status === "DONE"}
+              disabled={isTerminal}
               className={`w-full py-2 rounded-lg text-xs font-medium transition ${
-                (task.stage?.is_terminal ?? task.status === "DONE")
+                isTerminal
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-black text-white hover:bg-neutral-900"
               }`}
@@ -312,9 +320,9 @@ export default function TaskDrawer({
             </button>
             <button
               onClick={() => onCreateSubtask?.(task)}
-              disabled={task.stage?.is_terminal ?? task.status === "DONE"}
+              disabled={isTerminal}
               className={`w-full py-2 rounded-lg text-xs font-medium transition ${
-                (task.stage?.is_terminal ?? task.status === "DONE")
+                isTerminal
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-indigo-600 text-white hover:bg-indigo-700"
               }`}
@@ -334,7 +342,11 @@ export default function TaskDrawer({
             <div>
               <p className="text-neutral-500">Assigned To</p>
               <p className="text-neutral-900 font-medium">
-                {displayUser(task.assigned_to)}
+                {assigneeDisplayList.length
+                  ? assigneeDisplayList
+                      .map((assignee) => displayUser(assignee))
+                      .join(", ")
+                  : "—"}
               </p>
             </div>
 

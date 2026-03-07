@@ -6,7 +6,6 @@ import { Role, TaskStatus } from "@/lib/statusConfig"
 import {
   formatWorkflowLabel,
   getStatusLabel,
-  stageNameToStatusValue,
 } from "@/lib/workflowDisplay"
 import { apiFetchJson } from "@/lib/api"
 import { stageTone, stageToneStyle } from "@/lib/stageTheme"
@@ -39,7 +38,8 @@ export default function TaskWorkflow({
   const [workflow, setWorkflow] = useState<WorkflowDefinition | null>(null)
   const isTerminal =
     task.stage?.is_terminal ??
-    (task.status === "DONE" || task.status === "CANCELLED")
+    task.status_detail?.is_terminal ??
+    false
 
   useEffect(() => {
     let mounted = true
@@ -78,7 +78,7 @@ export default function TaskWorkflow({
       )
       .map((transition) => ({
         ...transition,
-        statusValue: stageNameToStatusValue(transition.to_stage_name),
+        statusValue: transition.to_stage_name,
       }))
   }, [workflow, task.stage?.id, activeRole])
 
@@ -111,9 +111,7 @@ export default function TaskWorkflow({
                 if (setSelectedStageId) {
                   setSelectedStageId(transition.to_stage)
                 }
-                if (transition.statusValue) {
-                  setSelectedStatus(transition.statusValue)
-                }
+                setSelectedStatus(transition.statusValue)
               }}
               className={`
                 ${isCompact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"}

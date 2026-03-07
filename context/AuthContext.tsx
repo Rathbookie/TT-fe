@@ -9,6 +9,15 @@ type AuthUser = {
   email: string
   first_name: string
   last_name: string
+  display_name: string
+  job_title: string
+  phone: string
+  timezone: string
+  bio: string
+  notify_task_assigned: boolean
+  notify_task_status_changed: boolean
+  notify_due_reminder: boolean
+  notify_proof_submitted: boolean
   tenant_slug: string
   roles: Role[]
 }
@@ -16,6 +25,7 @@ type AuthUser = {
 type AuthContextType = {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  refreshMe: () => Promise<void>
   isAuthenticated: boolean
   user: AuthUser | null
   roles: Role[]
@@ -153,6 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         login,
         logout,
+        refreshMe: fetchMe,
         isAuthenticated,
         user,
         roles,

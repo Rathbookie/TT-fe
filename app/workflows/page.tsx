@@ -162,6 +162,7 @@ export default function WorkflowBuilderPage() {
   const [draggingStageId, setDraggingStageId] = useState<number | null>(null)
   const [baselines, setBaselines] = useState<Record<number, string>>({})
   const [customStageColor, setCustomStageColor] = useState(DEFAULT_STAGE_COLOR)
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = useState(false)
 
   const selectedWorkflow = useMemo(
     () => workflows.find((wf) => wf.id === selectedWorkflowId) ?? null,
@@ -183,10 +184,32 @@ export default function WorkflowBuilderPage() {
         : null,
     [selectedWorkflow, selectedStageIndex]
   )
+  const stagePaletteColors = useMemo(() => {
+    const normalizedCustom = customStageColor.toUpperCase()
+    if (!/^#[0-9A-F]{6}$/.test(normalizedCustom)) {
+      return STAGE_PRESET_COLORS
+    }
+    return [normalizedCustom, ...STAGE_PRESET_COLORS.slice(1)]
+  }, [customStageColor])
 
   useEffect(() => {
     setCustomStageColor(selectedStage?.color || DEFAULT_STAGE_COLOR)
+    setIsCustomColorPickerOpen(false)
   }, [selectedStage?.id, selectedStage?.color])
+
+  const applySelectedStageColor = (color: string) => {
+    if (!selectedStage) return
+    if (!/^#[0-9A-F]{6}$/.test(color)) return
+    patchSelectedWorkflow((wf) => ({
+      ...wf,
+      stages: wf.stages.map((stage) =>
+        stage.id === selectedStage.id ? { ...stage, color } : stage
+      ),
+      statuses: (wf.statuses || []).map((status) =>
+        status.name === selectedStage.name ? { ...status, color } : status
+      ),
+    }))
+  }
 
   useEffect(() => {
     if (!user?.tenant_slug) return
@@ -820,8 +843,16 @@ export default function WorkflowBuilderPage() {
                           if (draggingStageId) moveStage(draggingStageId, stage.id)
                         }}
                       >
-                        <button
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => setSelectedStageId(stage.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault()
+                              setSelectedStageId(stage.id)
+                            }
+                          }}
                           className={`h-44 w-60 rounded-xl border p-3 text-left transition ${
                             selectedStageId === stage.id
                               ? ""
@@ -868,6 +899,7 @@ export default function WorkflowBuilderPage() {
                             Terminal stage
                           </p>
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation()
                               deleteStage(stage.id)
@@ -878,7 +910,7 @@ export default function WorkflowBuilderPage() {
                           >
                             <Trash2 size={10} />
                           </button>
-                        </button>
+                        </div>
                         {idx < selectedWorkflow.stages.length - 1 && (
                           <span className="text-slate-400">→</span>
                         )}
@@ -960,46 +992,61 @@ export default function WorkflowBuilderPage() {
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-slate-700">Stage Color</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => {
-                          if (!/^#[0-9A-F]{6}$/.test(customStageColor)) return
-                          patchSelectedWorkflow((wf) => ({
-                            ...wf,
-                            stages: wf.stages.map((stage) =>
-                              stage.id === selectedStage.id
-                                ? { ...stage, color: customStageColor }
-                                : stage
-                            ),
-                            statuses: (wf.statuses || []).map((status) =>
-                              status.name === selectedStage.name
-                                ? { ...status, color: customStageColor }
-                                : status
-                            ),
-                          }))
-                        }}
-                        className={`inline-flex h-7 min-w-[96px] items-center justify-center rounded-full border px-2 text-[11px] font-medium ${
-                          (selectedStage.color || DEFAULT_STAGE_COLOR) === customStageColor
-                            ? "border-slate-700 bg-slate-700 text-white"
-                            : "border-neutral-300 bg-white text-slate-700 hover:bg-neutral-50"
-                        }`}
-                        title="Use custom hex color"
-                      >
-                        Custom
-                      </button>
-                      {STAGE_PRESET_COLORS.map((color) => (
+                      <div className="relative">
                         <button
-                          key={color}
-                          onClick={() =>
-                            patchSelectedWorkflow((wf) => ({
-                              ...wf,
-                              stages: wf.stages.map((stage) =>
-                                stage.id === selectedStage.id ? { ...stage, color } : stage
-                              ),
-                              statuses: (wf.statuses || []).map((status) =>
-                                status.name === selectedStage.name ? { ...status, color } : status
-                              ),
-                            }))
-                          }
+                          onClick={() => setIsCustomColorPickerOpen((prev) => !prev)}
+                          className={`inline-flex h-7 min-w-[96px] items-center justify-center rounded-full border px-2 text-[11px] font-medium ${
+                            isCustomColorPickerOpen
+                              ? "border-slate-700 bg-slate-700 text-white"
+                              : "border-neutral-300 bg-white text-slate-700 hover:bg-neutral-50"
+                          }`}
+                          title="Choose custom color"
+                        >
+                          Custom
+                        </button>
+                        {isCustomColorPickerOpen ? (
+                          <div className="absolute left-0 top-9 z-20 w-56 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
+                            <div className="mb-2 flex items-center justify-between">
+                              <p className="text-[11px] font-medium text-slate-700">Custom color</p>
+                              <input
+                                type="color"
+                                value={/^#[0-9A-F]{6}$/.test(customStageColor) ? customStageColor : DEFAULT_STAGE_COLOR}
+                                onChange={(e) => setCustomStageColor(e.target.value.toUpperCase())}
+                                className="h-7 w-10 cursor-pointer rounded border border-neutral-200 bg-transparent p-0.5"
+                                title="Pick custom color"
+                              />
+                            </div>
+                            <input
+                              value={customStageColor}
+                              onChange={(e) => setCustomStageColor(e.target.value.toUpperCase())}
+                              placeholder="#3B82F6"
+                              className="w-full rounded-md border border-neutral-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+                            />
+                            <div className="mt-2 flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setIsCustomColorPickerOpen(false)}
+                                className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-neutral-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  applySelectedStageColor(customStageColor)
+                                  setIsCustomColorPickerOpen(false)
+                                }}
+                                disabled={!/^#[0-9A-F]{6}$/.test(customStageColor)}
+                                className="rounded-md bg-slate-900 px-2 py-1 text-[11px] text-white disabled:opacity-50"
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      {stagePaletteColors.map((color, index) => (
+                        <button
+                          key={`${color}-${index}`}
+                          onClick={() => applySelectedStageColor(color)}
                           className={`h-7 w-7 rounded-full border ${
                             (selectedStage.color || DEFAULT_STAGE_COLOR) === color
                               ? "ring-2 ring-slate-700 ring-offset-2"
@@ -1009,35 +1056,6 @@ export default function WorkflowBuilderPage() {
                           title={color}
                         />
                       ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={customStageColor}
-                        onChange={(e) => setCustomStageColor(e.target.value.toUpperCase())}
-                        placeholder="#3B82F6"
-                        className="w-36 rounded-lg border border-neutral-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
-                      />
-                      <button
-                        onClick={() => {
-                          if (!/^#[0-9A-F]{6}$/.test(customStageColor)) return
-                          patchSelectedWorkflow((wf) => ({
-                            ...wf,
-                            stages: wf.stages.map((stage) =>
-                              stage.id === selectedStage.id
-                                ? { ...stage, color: customStageColor }
-                                : stage
-                            ),
-                            statuses: (wf.statuses || []).map((status) =>
-                              status.name === selectedStage.name
-                                ? { ...status, color: customStageColor }
-                                : status
-                            ),
-                          }))
-                        }}
-                        className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-neutral-50"
-                      >
-                        Apply Custom
-                      </button>
                     </div>
                   </div>
                 </div>

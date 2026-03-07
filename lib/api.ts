@@ -15,6 +15,15 @@ export const clearTokens = (): void => {
   localStorage.removeItem("refresh")
 }
 
+const handleAuthExpired = () => {
+  if (typeof window === "undefined") return
+  clearTokens()
+  localStorage.removeItem("activeRole")
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login")
+  }
+}
+
 export const getAccessToken = () => {
   if (typeof window === "undefined") return null
   return localStorage.getItem("access")
@@ -27,7 +36,10 @@ const getRefreshToken = () => {
 
 const refreshAccessToken = async (): Promise<string | null> => {
   const refresh = getRefreshToken()
-  if (!refresh) return null
+  if (!refresh) {
+    handleAuthExpired()
+    return null
+  }
 
   const res = await fetch(`${BASE_URL}/api/token/refresh/`, {
     method: "POST",
@@ -36,8 +48,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
   })
 
   if (!res.ok) {
-    localStorage.removeItem("access")
-    localStorage.removeItem("refresh")
+    handleAuthExpired()
     return null
   }
 
@@ -76,8 +87,14 @@ export const apiFetch = async (
 
   if (res.status === 401) {
     const newAccess = await refreshAccessToken()
-    if (!newAccess) return res
+    if (!newAccess) {
+      handleAuthExpired()
+      return res
+    }
     res = await makeRequest(newAccess)
+    if (res.status === 401) {
+      handleAuthExpired()
+    }
   }
 
   return res
