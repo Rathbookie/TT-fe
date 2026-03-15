@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutGrid,
@@ -77,6 +77,9 @@ export default function TasksPage({ divisionSlugOverride = null }: TasksPageProp
     [activeRole]
   )
   const groupByAssignmentLabel = activeRole === "TASK_RECEIVER" ? "Group by Assigner" : "Group by Assignee"
+  const isTaskTerminal = useCallback((task: Task) =>
+    Boolean(task.stage?.is_terminal ?? task.status_detail?.is_terminal ?? false)
+  , [])
 
   const toggleSelection = (taskId: number) => {
     setSelectedIds((prev) =>
@@ -180,11 +183,7 @@ export default function TasksPage({ divisionSlugOverride = null }: TasksPageProp
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       next = next.filter((task) => {
         if (!task.due_date) return false
-        const stageName = (task.stage?.name || task.status || "").toUpperCase()
-        if (task.stage?.is_terminal) return false
-        if (stageName === "DONE" || stageName === "CANCELLED" || stageName === "COMPLETED") {
-          return false
-        }
+        if (isTaskTerminal(task)) return false
         const due = new Date(task.due_date)
         if (Number.isNaN(due.getTime())) return false
         return due.getTime() < startOfToday.getTime()
@@ -256,13 +255,10 @@ export default function TasksPage({ divisionSlugOverride = null }: TasksPageProp
 
   useEffect(() => {
     if (!selectedTask || showTerminal) return
-    const isTerminalStage = selectedTask.stage?.is_terminal ?? false
-    const isCompletedStatus =
-      selectedTask.status === "DONE" || selectedTask.status === "CANCELLED"
-    if (isTerminalStage || isCompletedStatus) {
+    if (isTaskTerminal(selectedTask)) {
       setSelectedTask(null)
     }
-  }, [selectedTask, setSelectedTask, showTerminal])
+  }, [selectedTask, setSelectedTask, showTerminal, isTaskTerminal])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -372,7 +368,7 @@ export default function TasksPage({ divisionSlugOverride = null }: TasksPageProp
                     : "border-neutral-200 bg-white text-slate-600 hover:bg-neutral-50"
                 }`}
               >
-                {showTerminal ? "Hide Done" : "Show Done"}
+                {showTerminal ? "Hide Closed" : "Show Closed"}
               </button>
               <div className="ml-auto flex items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1">
                 <button

@@ -40,6 +40,7 @@ type WorkflowOption = {
     id: number
     name: string
     is_terminal?: boolean
+    is_pausable?: boolean
   }>
 }
 
@@ -97,6 +98,7 @@ export default function TaskFullView({
   const [blockedReason, setBlockedReason] = useState(
     task?.blocked_reason || ""
   )
+  const [needsPauseReason, setNeedsPauseReason] = useState(false)
   const [boards, setBoards] = useState<BoardOption[]>([])
   const [workflows, setWorkflows] = useState<WorkflowOption[]>([])
   const [selectedBoardId, setSelectedBoardId] = useState<number | null>(
@@ -112,6 +114,29 @@ export default function TaskFullView({
     task?.status_detail?.id ?? null
   )
   const [selectedParentTaskId] = useState<number | null>(parentTask?.id ?? null)
+  const selectedWorkflowStage = workflows
+    .find((workflow) => workflow.id === selectedWorkflowId)
+    ?.stages?.find((stage) => stage.id === selectedStageId)
+  const selectedStageIsPausable = Boolean(selectedWorkflowStage?.is_pausable || needsPauseReason)
+
+  const resolveBoardStatusIdForStage = (
+    boardId: number | null,
+    workflowId: number | null,
+    stageId: number | null
+  ) => {
+    const board = boards.find((item) => item.id === boardId)
+    if (!board) return null
+    const workflow = workflows.find((item) => item.id === workflowId)
+    const stage = workflow?.stages?.find((item) => item.id === stageId)
+    const matchedStatus = stage
+      ? board.statuses.find((status) => status.name.trim().toLowerCase() === stage.name.trim().toLowerCase())
+      : null
+    if (matchedStatus) return matchedStatus.id
+    const defaultStatus =
+      board.statuses.find((status) => status.is_default) ||
+      [...board.statuses].sort((a, b) => a.order - b.order)[0]
+    return defaultStatus?.id ?? null
+  }
 
   // -----------------------------
 // DIRTY STATE DETECTION
@@ -144,9 +169,6 @@ const original = task
     )
 
   // 💾 Save
-  const selectedBoard = boards.find((b) => b.id === selectedBoardId) || null
-  const statusOptions = selectedBoard?.statuses || []
-
   useEffect(() => {
     if (!isCreate) return
     let mounted = true
@@ -169,10 +191,6 @@ const original = task
         if (!initialBoardId && boardList.length > 0) {
           const defaultBoard = boardList[0]
           setSelectedBoardId(defaultBoard.id)
-          const defaultStatus =
-            defaultBoard.statuses.find((s) => s.is_default) ||
-            [...defaultBoard.statuses].sort((a, b) => a.order - b.order)[0]
-          if (defaultStatus) setSelectedCreateStatusId(defaultStatus.id)
         }
 
         if (!task?.workflow?.id && workflowList.length > 0) {
@@ -195,9 +213,20 @@ const original = task
     }
   }, [initialBoardId, isCreate, task?.workflow?.id])
 
+  useEffect(() => {
+    if (!isCreate) return
+    setSelectedCreateStatusId(
+      resolveBoardStatusIdForStage(selectedBoardId, selectedWorkflowId, selectedStageId)
+    )
+  }, [boards, workflows, isCreate, selectedBoardId, selectedWorkflowId, selectedStageId])
+
   const handleSave = async () => {
     if (!title || !priority || assignees.length === 0 || !dueDate || !selectedBoardId) {
       alert("Please fill all required fields.")
+      return
+    }
+    if (selectedStageIsPausable && !blockedReason.trim()) {
+      alert("Pause reason is required for this status.")
       return
     }
 
@@ -258,7 +287,7 @@ const original = task
         )
       }
 
-      if (selectedStatus === "BLOCKED") {
+      if (selectedStageIsPausable) {
         formData.append("blocked_reason", blockedReason)
       }
 
@@ -417,6 +446,7 @@ const original = task
           setSelectedStageId={setSelectedStageId}
           blockedReason={blockedReason}
           setBlockedReason={setBlockedReason}
+          setNeedsPauseReason={setNeedsPauseReason}
         />
       )}
 

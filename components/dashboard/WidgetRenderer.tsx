@@ -113,13 +113,18 @@ export function ExpandedWidgetModal({ instance, context, onUpdate, onClose }: Ex
   const widget = WIDGET_COMPONENTS[instance.key as DashboardWidgetKey]
   if (!widget) return null
 
+  const isTaskTerminal = (task: DashboardWidgetContext["tasks"][number]) =>
+    Boolean(task.stage?.is_terminal ?? task.status_detail?.is_terminal ?? false)
+  const isTaskCancelled = (task: DashboardWidgetContext["tasks"][number]) =>
+    Boolean(task.status_detail?.is_cancelled ?? false)
+
   const total = context.tasks.length
   const completed = context.tasks.filter(
-    (task) => task.stage?.is_terminal || task.status === "DONE"
+    (task) => isTaskTerminal(task) && !isTaskCancelled(task)
   ).length
   const overdue = context.tasks.filter((task) => {
     if (!task.due_date) return false
-    if (task.stage?.is_terminal) return false
+    if (isTaskTerminal(task)) return false
     return new Date(task.due_date) < new Date(new Date().setHours(0, 0, 0, 0))
   }).length
 

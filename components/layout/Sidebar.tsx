@@ -19,6 +19,8 @@ import {
   MoreHorizontal,
   Settings,
   Users,
+  Home,
+  Gauge,
 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { apiFetch, apiFetchJson } from "@/lib/api"
@@ -65,6 +67,17 @@ type FloatingCreateMenu =
 const extractResults = <T,>(payload: CollectionResponse<T>): T[] =>
   Array.isArray(payload) ? payload : payload.results || []
 
+const HIERARCHY_CACHE_TTL_MS = 15000
+let hierarchyCache:
+  | {
+      tenantSlug: string
+      at: number
+      divisions: DivisionItem[]
+      sections: SectionItem[]
+      boards: BoardItem[]
+    }
+  | null = null
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [searchText, setSearchText] = useState("")
@@ -91,6 +104,10 @@ export default function Sidebar() {
   const orgHref = (path: string) => `${orgBase}${path}`
 
   const topItems = [
+    { href: orgHref("/home"), match: "/home", label: "Home", icon: <Home size={14} /> },
+    ...(activeRole === "TASK_RECEIVER"
+      ? []
+      : [{ href: orgHref("/performance"), match: "/performance", label: "Performance", icon: <Gauge size={14} /> }]),
     { href: orgHref("/org-view"), match: "/org-view", label: "Org View", icon: <Users size={14} /> },
     { href: orgHref("/workflows"), match: "/workflows", label: "Workflows", icon: <Network size={14} /> },
     { href: orgHref("/modules"), match: "/modules", label: "Modules", icon: <Package size={14} /> },
@@ -173,8 +190,23 @@ export default function Sidebar() {
     return false
   }
 
-  const loadHierarchy = useCallback(async () => {
+  const loadHierarchy = useCallback(async (force = false) => {
     if (!user?.tenant_slug) return
+
+    if (
+      !force &&
+      hierarchyCache &&
+      hierarchyCache.tenantSlug === user.tenant_slug &&
+      Date.now() - hierarchyCache.at < HIERARCHY_CACHE_TTL_MS
+    ) {
+      setDivisions(hierarchyCache.divisions)
+      setSections(hierarchyCache.sections)
+      setBoards(hierarchyCache.boards)
+      if (hierarchyCache.divisions[0]) {
+        setExpandedDivisions((prev) => (prev.length ? prev : [hierarchyCache!.divisions[0].id]))
+      }
+      return
+    }
 
     setLoadingHierarchy(true)
     setActionMessage(null)
@@ -206,6 +238,13 @@ export default function Sidebar() {
       const uniqueBoards = Array.from(new Map(allBoards.map((board) => [board.id, board])).values())
       uniqueBoards.sort((a, b) => a.name.localeCompare(b.name))
       setBoards(uniqueBoards)
+      hierarchyCache = {
+        tenantSlug: user.tenant_slug,
+        at: Date.now(),
+        divisions: divisionList,
+        sections: sectionList,
+        boards: uniqueBoards,
+      }
 
       if (divisionList[0]) {
         setExpandedDivisions((prev) => (prev.length ? prev : [divisionList[0].id]))
@@ -249,7 +288,7 @@ export default function Sidebar() {
         method: "POST",
         body: JSON.stringify({ name: "New Section", division: divisionId }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to create section.")
     } finally {
@@ -267,7 +306,7 @@ export default function Sidebar() {
         method: "POST",
         body: JSON.stringify({ name: "New List", division: divisionId }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
       const divisionSlug = getDivisionSlugById(divisionId)
       if (divisionSlug) {
         router.push(orgHref(`/divisions/${divisionSlug}/tasks?board=${board.id}`))
@@ -289,7 +328,7 @@ export default function Sidebar() {
         method: "POST",
         body: JSON.stringify({ name: "New List", section: sectionId }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
       const section = getSectionById(sectionId)
       const divisionSlug = getDivisionSlugById(section?.division)
       if (divisionSlug) {
@@ -381,7 +420,7 @@ export default function Sidebar() {
     try {
       const res = await apiFetch(`/api/sections/${sectionId}/`, { method: "DELETE" })
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
-      await loadHierarchy()
+      await loadHierarchy(true)
       setSectionMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to delete section.")
@@ -401,7 +440,7 @@ export default function Sidebar() {
         method: "PATCH",
         body: JSON.stringify({ name }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
       setDivisionMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to rename division.")
@@ -418,7 +457,7 @@ export default function Sidebar() {
     try {
       const res = await apiFetch(`/api/divisions/${divisionId}/`, { method: "DELETE" })
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
-      await loadHierarchy()
+      await loadHierarchy(true)
       setDivisionMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to delete division.")
@@ -438,7 +477,7 @@ export default function Sidebar() {
         method: "PATCH",
         body: JSON.stringify({ name }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
       setSectionMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to rename section.")
@@ -458,7 +497,7 @@ export default function Sidebar() {
         method: "PATCH",
         body: JSON.stringify({ name }),
       })
-      await loadHierarchy()
+      await loadHierarchy(true)
       setBoardMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to rename list.")
@@ -474,7 +513,7 @@ export default function Sidebar() {
     try {
       const res = await apiFetch(`/api/boards/${boardId}/`, { method: "DELETE" })
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
-      await loadHierarchy()
+      await loadHierarchy(true)
       setBoardMenuId(null)
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Failed to delete list.")
@@ -955,7 +994,7 @@ export default function Sidebar() {
         open={showCreateDivisionModal}
         onClose={() => setShowCreateDivisionModal(false)}
         onCreated={() => {
-          void loadHierarchy()
+          void loadHierarchy(true)
         }}
       />
       {typeof window !== "undefined" && floatingCreateMenu

@@ -1,8 +1,14 @@
+export type WorkflowStageType = "GENERAL" | "COMPLETED" | "PAUSED" | "CANCELLED"
+export type WorkflowEntryReasonMode = "NONE" | "OPTIONAL" | "REQUIRED"
+
 export type WorkflowStage = {
   id: number
   name: string
   order: number
+  stage_type: WorkflowStageType
+  entry_reason_mode: WorkflowEntryReasonMode
   is_terminal: boolean
+  is_pausable?: boolean
   requires_attachments: boolean
   requires_approval?: boolean
   color?: string

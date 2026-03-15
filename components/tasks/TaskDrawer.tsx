@@ -11,6 +11,7 @@ import TaskProofs from "./TaskProofs"
 import Badge from "@/components/ui/Badge"
 import { Task } from "@/types/task"
 import CreatorSubmissionView from "./CreatorSubmissionView"
+import TaskRating from "./TaskRating"
 
 type TaskHistoryEntry = {
   id: number
@@ -45,6 +46,7 @@ export default function TaskDrawer({
     useState<TaskStatus | null>(null)
   const [selectedStageId, setSelectedStageId] = useState<number | null>(task?.stage?.id ?? null)
   const [blockedReason, setBlockedReason] = useState("")
+  const [needsPauseReason, setNeedsPauseReason] = useState(false)
   const [loading, setLoading] = useState(false)
 
   /* ----------------- */
@@ -87,6 +89,7 @@ export default function TaskDrawer({
     setSelectedStatus(null)
     setSelectedStageId(task?.stage?.id ?? null)
     setBlockedReason(task?.blocked_reason || "")
+    setNeedsPauseReason(false)
   }, [task])
 
   if (!task) return null
@@ -124,11 +127,8 @@ export default function TaskDrawer({
     console.log("Active Role:", activeRole)
     if (!selectedStatus && selectedStageId === (task.stage?.id ?? null)) return
 
-    if (
-      selectedStatus === "BLOCKED" &&
-      !blockedReason.trim()
-    ) {
-      alert("Blocked reason is required.")
+    if (needsPauseReason && !blockedReason.trim()) {
+      alert("Pause reason is required.")
       return
     }
 
@@ -144,7 +144,7 @@ export default function TaskDrawer({
     }
     formData.append("version", task.version.toString())
 
-    if (selectedStatus === "BLOCKED") {
+    if (needsPauseReason) {
       formData.append("blocked_reason", blockedReason)
     }
 
@@ -213,7 +213,9 @@ export default function TaskDrawer({
             <Badge
               variant="status"
               value={task.stage?.name || task.status}
-              isTerminal={Boolean(task.stage?.is_terminal)}
+              isTerminal={Boolean(task.stage?.is_terminal ?? task.status_detail?.is_terminal)}
+              isPausable={Boolean(task.stage?.is_pausable ?? task.status_detail?.is_pausable)}
+              isCancelled={Boolean(task.status_detail?.is_cancelled)}
               color={task.stage?.color || task.status_detail?.color || null}
             />
             <Badge variant="priority" value={task.priority ?? "P3"} />
@@ -245,6 +247,7 @@ export default function TaskDrawer({
             setSelectedStageId={setSelectedStageId}
             blockedReason={blockedReason}
             setBlockedReason={setBlockedReason}
+            setNeedsPauseReason={setNeedsPauseReason}
             mode="compact"
           />
 
@@ -288,6 +291,23 @@ export default function TaskDrawer({
           )}
           <TaskProofs taskId={task.id} disabled={isTerminal} />
         </div>
+
+        {/* PERFORMANCE */}
+        {isTerminal && !task.status_detail?.is_cancelled && (activeRole === "ADMIN" || activeRole === "TASK_CREATOR") && (
+          <div className="bg-neutral-50 rounded-lg p-4 space-y-2">
+            <p className="text-xs uppercase tracking-wide text-neutral-500">
+              Performance
+            </p>
+            <TaskRating
+              taskId={task.id}
+              isTerminal={isTerminal}
+              isCancelled={Boolean(task.status_detail?.is_cancelled)}
+              role={activeRole}
+              editable
+              showCommentInput
+            />
+          </div>
+        )}
 
         {activeRole === "TASK_RECEIVER" &&
           !isTerminal &&
@@ -379,7 +399,9 @@ export default function TaskDrawer({
                   <Badge
                     variant="status"
                     value={task.stage.name}
-                    isTerminal={Boolean(task.stage?.is_terminal)}
+                    isTerminal={Boolean(task.stage?.is_terminal ?? task.status_detail?.is_terminal)}
+                    isPausable={Boolean(task.stage?.is_pausable ?? task.status_detail?.is_pausable)}
+                    isCancelled={Boolean(task.status_detail?.is_cancelled)}
                     color={task.stage?.color || task.status_detail?.color || null}
                   />
                 </div>

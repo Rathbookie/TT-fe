@@ -624,7 +624,6 @@ export default function DashboardPage({
           <option value="ALL">Status: All</option>
           <option value="NOT_STARTED">Not Started</option>
           <option value="IN_PROGRESS">In Progress</option>
-          <option value="BLOCKED">Blocked</option>
           <option value="WAITING_REVIEW">Review</option>
           <option value="DONE">Done</option>
         </select>

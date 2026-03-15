@@ -34,10 +34,7 @@ export default function TaskTable({
 }: Props) {
   const PAGE_SIZE = 20
   const start = count > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0
-  const end =
-    count > 0
-      ? Math.min((currentPage - 1) * PAGE_SIZE + tasks.length, count)
-      : 0
+  const end = count > 0 ? Math.min((currentPage - 1) * PAGE_SIZE + tasks.length, count) : 0
 
   if (loading) {
     return (
@@ -55,10 +52,12 @@ export default function TaskTable({
     )
   }
 
+  // Rating column only meaningful for ADMIN and TASK_CREATOR
+  const showRating = role === "ADMIN" || role === "TASK_CREATOR"
+
   return (
     <div className="bg-white border border-neutral-200 rounded-lg h-full flex flex-col min-w-0 text-xs">
 
-      {/* TABLE SCROLL AREA */}
       <div className="flex-1 overflow-auto min-w-0">
         <table className="w-full text-xs table-fixed">
           <thead className="sticky top-0 z-10 bg-neutral-50">
@@ -66,27 +65,15 @@ export default function TaskTable({
               <th className="px-3 py-2.5 w-[4%] first:rounded-tl-lg">
                 <span className="sr-only">Select</span>
               </th>
-              <th className="px-4 py-2.5 w-[25%]">
-                Title
-              </th>
-              <th className="px-4 py-2.5 w-[15%]">
-                Stage
-              </th>
-              <th className="px-4 py-2.5 w-[12%]">
-                Priority
-              </th>
-              <th className="px-4 py-2.5 w-[15%]">
-                Due Date
-              </th>
-              <th className="px-4 py-2.5 w-[20%] whitespace-nowrap">
-                {assignmentColumn}
-              </th>
-              <th className="px-4 py-2.5 w-[14%]">
-                Custom Fields
-              </th>
-              <th className="px-4 py-2.5 w-[10%] last:rounded-tr-lg">
-                Actions
-              </th>
+              <th className="px-4 py-2.5 w-[25%]">Title</th>
+              <th className="px-4 py-2.5 w-[15%]">Stage</th>
+              <th className="px-4 py-2.5 w-[12%]">Priority</th>
+              <th className="px-4 py-2.5 w-[15%]">Due Date</th>
+              <th className="px-4 py-2.5 w-[15%] whitespace-nowrap">{assignmentColumn}</th>
+              {showRating && (
+                <th className="px-4 py-2.5 w-[14%]">Quality Rating</th>
+              )}
+              <th className="px-4 py-2.5 w-[10%] last:rounded-tr-lg">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -105,48 +92,33 @@ export default function TaskTable({
         </table>
       </div>
 
-      {/* PAGINATION FOOTER */}
       {totalPages > 1 && (
         <div className="border-t border-neutral-200 px-4 py-2 flex items-center justify-between text-xs text-neutral-600">
-          <div>
-            Showing {start}–{end} of {count} tasks
-          </div>
-
+          <div>Showing {start}–{end} of {count} tasks</div>
           <div className="flex items-center gap-2">
             <button
               disabled={currentPage === 1}
               onClick={() => onPageChange(currentPage - 1)}
               className="h-7 w-7 rounded-md border bg-white disabled:opacity-40"
-            >
-              ‹
-            </button>
-
+            >‹</button>
             {Array.from({ length: totalPages }).map((_, i) => {
               const page = i + 1
               const active = page === currentPage
-
               return (
                 <button
                   key={page}
                   onClick={() => onPageChange(page)}
-                  className={`h-7 w-7 rounded-md border ${
-                    active
-                      ? "border-black bg-neutral-200"
-                      : "bg-white hover:bg-neutral-100"
-                  }`}
+                  className={`h-7 w-7 rounded-md border ${active ? "border-black bg-neutral-200" : "bg-white hover:bg-neutral-100"}`}
                 >
                   {page}
                 </button>
               )
             })}
-
             <button
               disabled={currentPage === totalPages}
               onClick={() => onPageChange(currentPage + 1)}
               className="h-7 w-7 rounded-md border bg-white disabled:opacity-40"
-            >
-              ›
-            </button>
+            >›</button>
           </div>
         </div>
       )}

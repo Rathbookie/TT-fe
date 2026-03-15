@@ -105,11 +105,11 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          {/* BLOCKED TASKS */}
+          {/* PAUSABLE TASKS */}
           <div className="flex-1 bg-neutral-100 rounded-2xl px-8 py-6">
             <div className="flex justify-between items-start">
               <p className="text-base text-neutral-600">
-                Blocked Tasks
+                Paused Tasks
               </p>
               <AlertCircle className="w-5 h-5 text-red-600" />
             </div>

@@ -40,6 +40,7 @@ export type TaskStatusDetail = {
   color: string
   order: number
   is_terminal: boolean
+  is_pausable: boolean
   is_cancelled: boolean
   is_default: boolean
 }
@@ -55,6 +56,7 @@ export type WorkflowStageProjection = {
   name: string
   order: number
   is_terminal: boolean
+  is_pausable?: boolean
   color?: string
 }
 

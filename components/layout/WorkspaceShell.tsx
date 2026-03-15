@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react"
 import { Bell, Search, ChevronRight, Settings, X } from "lucide-react"
+import { useRouter } from "next/navigation"
 import Sidebar from "@/components/layout/Sidebar"
 import { useAuth } from "@/context/AuthContext"
 import { apiFetchJson } from "@/lib/api"
@@ -35,6 +36,7 @@ export default function WorkspaceShell({
   actions,
   children,
 }: Props) {
+  const router = useRouter()
   const { activeRole, user } = useAuth()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
@@ -373,7 +375,13 @@ export default function WorkspaceShell({
                     </div>
                   ) : null}
                 </div>
-                <button className="rounded-md border border-neutral-200 bg-white p-1.5 text-slate-500 hover:bg-neutral-50">
+                <button
+                  onClick={() => {
+                    const href = user?.tenant_slug ? `/${user.tenant_slug}/settings` : "/settings"
+                    router.push(href)
+                  }}
+                  className="rounded-md border border-neutral-200 bg-white p-1.5 text-slate-500 hover:bg-neutral-50"
+                >
                   <Settings size={12} />
                 </button>
                 <div className="hidden rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-slate-600 lg:block">

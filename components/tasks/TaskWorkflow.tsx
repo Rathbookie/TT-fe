@@ -20,6 +20,7 @@ type Props = {
   setSelectedStageId?: (stageId: number | null) => void
   blockedReason: string
   setBlockedReason: (value: string) => void
+  setNeedsPauseReason?: (value: boolean) => void
   mode?: "full" | "compact"
 }
 
@@ -32,6 +33,7 @@ export default function TaskWorkflow({
   setSelectedStageId,
   blockedReason,
   setBlockedReason,
+  setNeedsPauseReason,
   mode = "full",
 }: Props) {
   const isCompact = mode === "compact"
@@ -79,8 +81,15 @@ export default function TaskWorkflow({
       .map((transition) => ({
         ...transition,
         statusValue: transition.to_stage_name,
+        is_pausable:
+          workflow.stages.find((stage) => stage.id === transition.to_stage)?.is_pausable ?? false,
       }))
   }, [workflow, task.stage?.id, activeRole])
+
+  const selectedStageIsPausable = useMemo(() => {
+    if (!workflow || !selectedStageId) return false
+    return workflow.stages.find((stage) => stage.id === selectedStageId)?.is_pausable ?? false
+  }, [workflow, selectedStageId])
 
   return (
     <div className={isCompact ? "space-y-3" : "space-y-4"}>
@@ -112,6 +121,7 @@ export default function TaskWorkflow({
                   setSelectedStageId(transition.to_stage)
                 }
                 setSelectedStatus(transition.statusValue)
+                setNeedsPauseReason?.(transition.is_pausable)
               }}
               className={`
                 ${isCompact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"}
@@ -127,11 +137,11 @@ export default function TaskWorkflow({
         </div>
       )}
 
-      {/* Blocked Reason */}
-      {selectedStatus === "BLOCKED" && (
+      {/* Pausable reason */}
+      {selectedStageIsPausable && (
         <div className="space-y-2">
           <label className="text-xs font-medium">
-            Blocked Reason *
+            Pause Reason *
           </label>
           <textarea
             value={blockedReason}

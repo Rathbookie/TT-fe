@@ -125,19 +125,25 @@ export const apiFetchJson = async <T = unknown>(
 
   let res = await apiFetch(endpoint, options)
   if (retryable && res.status === 429) {
-    const retryAfter = res.headers.get("retry-after")
-    const throttleBody = await res.text()
-    const waitMs = parseThrottleMs(retryAfter, throttleBody) || 1500
-    await sleep(Math.min(waitMs, 30000))
-    res = await apiFetch(endpoint, options)
+    for (let attempt = 0; attempt < 3 && res.status === 429; attempt += 1) {
+      const retryAfter = res.headers.get("retry-after")
+      const throttleBody = await res.text()
+      const waitMs =
+        parseThrottleMs(retryAfter, throttleBody) ||
+        Math.min(1500 * (attempt + 1), 5000)
+      await sleep(Math.min(waitMs, 30000))
+      res = await apiFetch(endpoint, options)
+    }
   }
 
   const contentType = res.headers.get("content-type")
 
   if (!res.ok) {
     const text = await res.text()
-    console.error("API ERROR:", res.status)
-    console.error("Response body:", text)
+    if (res.status !== 429) {
+      console.error("API ERROR:", res.status)
+      console.error("Response body:", text)
+    }
     let detail = text
     try {
       const parsed = JSON.parse(text) as { detail?: string; error?: string }

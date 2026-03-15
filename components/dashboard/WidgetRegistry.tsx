@@ -186,6 +186,14 @@ function startOfToday() {
   return now
 }
 
+function isTaskTerminal(task: Task) {
+  return Boolean(task.stage?.is_terminal ?? task.status_detail?.is_terminal ?? false)
+}
+
+function isTaskCancelled(task: Task) {
+  return Boolean(task.status_detail?.is_cancelled ?? false)
+}
+
 function countByStatus(tasks: Task[]) {
   const map = new Map<string, number>()
   tasks.forEach((task) => {
@@ -270,7 +278,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
     const prompt = String(instance.settings?.prompt || "")
     const output = String(instance.settings?.output || "")
     const taskCount = context.tasks.length
-    const openCount = context.tasks.filter((task) => !(task.stage?.is_terminal ?? false)).length
+    const openCount = context.tasks.filter((task) => !isTaskTerminal(task)).length
     return card(
       "Featured",
       <Lightbulb size={13} className="text-amber-600" />,
@@ -321,7 +329,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
 
       if (mode === "overdue") {
         if (!task.due_date) return false
-        if (task.stage?.is_terminal || ["DONE", "COMPLETED", "CANCELLED"].includes(stageName)) {
+        if (isTaskTerminal(task)) {
           return false
         }
         return new Date(task.due_date) < startOfToday()
@@ -329,7 +337,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
 
       if (mode === "due_soon") {
         if (!task.due_date) return false
-        if (task.stage?.is_terminal || ["DONE", "COMPLETED", "CANCELLED"].includes(stageName)) {
+        if (isTaskTerminal(task)) {
           return false
         }
         const today = startOfToday()
@@ -340,7 +348,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
       }
 
       if (mode === "completed") {
-        return task.stage?.is_terminal || ["DONE", "COMPLETED"].includes(stageName)
+        return isTaskTerminal(task) && !isTaskCancelled(task)
       }
 
       if (mode === "priority") {
@@ -388,7 +396,6 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
             <option value="all">All Stages</option>
             <option value="NOT_STARTED">Not Started</option>
             <option value="IN_PROGRESS">In Progress</option>
-            <option value="BLOCKED">Blocked</option>
             <option value="WAITING_REVIEW">In Review</option>
             <option value="DONE">Done</option>
           </select>
@@ -612,7 +619,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
       const key = task.workflow?.name || "General"
       const current = workflowMap.get(key) || { total: 0, done: 0 }
       current.total += 1
-      if ((task.stage?.is_terminal ?? false) || task.status === "DONE") current.done += 1
+      if (isTaskTerminal(task) && !isTaskCancelled(task)) current.done += 1
       workflowMap.set(key, current)
     })
     const rows = [...workflowMap.entries()]
@@ -788,7 +795,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
     const sourceRows = serverTaskRows(context, "my_tasks")
     const overdue = (sourceRows.length ? sourceRows : context.tasks).filter((task) => {
       if (!task.due_date) return false
-      if ("stage" in task && task.stage?.is_terminal) return false
+      if ("stage" in task && isTaskTerminal(task)) return false
       return new Date(task.due_date) < startOfToday()
     })
     const serverOverdue = Number(context.serverWidgetsByKey.tasks_overdue?.value || overdue.length)
@@ -865,7 +872,7 @@ export const WIDGET_COMPONENTS: Record<DashboardWidgetKey, WidgetComponent> = {
     cutoff.setDate(cutoff.getDate() + 14)
     const dueSoon = (sourceRows.length ? sourceRows : context.tasks).filter((task) => {
       if (!task.due_date) return false
-      if ("stage" in task && task.stage?.is_terminal) return false
+      if ("stage" in task && isTaskTerminal(task)) return false
       const due = new Date(task.due_date)
       return due >= today && due <= cutoff
     })
