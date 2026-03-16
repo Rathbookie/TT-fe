@@ -72,20 +72,23 @@ export default function TaskWorkflow({
 
   const transitions = useMemo(() => {
     if (!workflow || !task.stage?.id) return []
-    const normalizedRole = activeRole.toUpperCase().replace(/ /g, "_")
+    const isPaused = task.stage?.stage_type === "PAUSED"
     return workflow.transitions
-      .filter(
-        (transition) =>
-          transition.from_stage === task.stage?.id &&
-          transition.allowed_role === activeRole
-      )
+      .filter((transition) => {
+        if (transition.from_stage !== task.stage?.id) return false
+        if (transition.allowed_role !== activeRole) return false
+        if (isPaused) {
+          return task.paused_from_stage?.id
+            ? transition.to_stage === task.paused_from_stage.id
+            : false
+        }
+        return true
+      })
       .map((transition) => ({
         ...transition,
         statusValue: transition.to_stage_name,
-        is_pausable:
-          workflow.stages.find((stage) => stage.id === transition.to_stage)?.is_pausable ?? false,
       }))
-  }, [workflow, task.stage?.id, activeRole])
+  }, [workflow, task.stage?.id, task.stage?.stage_type, task.paused_from_stage?.id, activeRole])
 
   const selectedStageIsPausable = useMemo(() => {
     if (!workflow || !selectedStageId) return false
@@ -122,7 +125,8 @@ export default function TaskWorkflow({
                   setSelectedStageId(transition.to_stage)
                 }
                 setSelectedStatus(transition.statusValue)
-                setNeedsPauseReason?.(transition.is_pausable)
+                const toStage = workflow?.stages.find((s) => s.id === transition.to_stage)
+                setNeedsPauseReason?.(toStage?.is_pausable ?? false)
               }}
               className={`
                 ${isCompact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"}

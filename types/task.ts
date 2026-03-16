@@ -58,6 +58,7 @@ export type WorkflowStageProjection = {
   is_terminal: boolean
   is_pausable?: boolean
   color?: string
+  stage_type?: string
 }
 
 
@@ -73,6 +74,7 @@ export type Task = {
   status_detail?: TaskStatusDetail | null
   workflow?: WorkflowProjection | null
   stage?: WorkflowStageProjection | null
+  paused_from_stage?: WorkflowStageProjection | null
   priority?: TaskPriority | null
 
   due_date?: string | null

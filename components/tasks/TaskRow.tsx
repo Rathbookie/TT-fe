@@ -38,8 +38,8 @@ export default function TaskRow({
     task.status_detail?.is_terminal ??
     false
 
-  const isCancelled = task.status_detail?.is_cancelled ?? false
-
+  const isCancelled = task.stage?.stage_type === "CANCELLED" || task.status_detail?.is_cancelled || false
+  
   const isOverdue = (() => {
     if (!task.due_date) return false
     if (isTerminal) return false
