@@ -186,20 +186,6 @@ function normalizeWorkflowStructure(workflow: WorkflowDefinition): WorkflowDefin
   const stages = [...generalStages, completedStage, ...pausedStages, ...cancelledStages]
   const nextWorkflow = { ...workflow, stages }
 
-  const statuses = sortStages(stages)
-    .filter((stage) => stage.stage_type !== "CANCELLED")
-    .map((stage, index) => {
-      const existing = workflow.statuses.find((status) => status.name === stage.name)
-      return {
-        id: existing?.id ?? -(Math.abs(stage.id) + index + 1),
-        name: stage.name,
-        order: index,
-        is_terminal: stage.stage_type === "COMPLETED",
-        color: stage.color || DEFAULT_STAGE_COLOR,
-      }
-    })
-
-  const validStatusNames = new Set(statuses.map((status) => status.name))
   const validTransitions = workflow.transitions
     .filter((transition) => isValidTransition(nextWorkflow, transition.from_stage, transition.to_stage))
     .map((transition) => {
@@ -214,22 +200,8 @@ function normalizeWorkflowStructure(workflow: WorkflowDefinition): WorkflowDefin
       }
     })
 
-  const statusByName = new Map(statuses.map((status) => [status.name, status]))
-  const transitionRules = (workflow.transition_rules || [])
-    .filter(
-      (rule) =>
-        validStatusNames.has(rule.from_status_name) && validStatusNames.has(rule.to_status_name)
-    )
-    .map((rule) => ({
-      ...rule,
-      from_status: statusByName.get(rule.from_status_name)?.id || rule.from_status,
-      to_status: statusByName.get(rule.to_status_name)?.id || rule.to_status,
-    }))
-
   return {
     ...nextWorkflow,
-    statuses,
-    transition_rules: transitionRules,
     transitions: validTransitions,
   }
 }
@@ -265,15 +237,6 @@ function hydrateWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
   const hydrated = {
     ...workflow,
     stages: sortStages(workflow.stages).map((stage) => sanitizeStage(stage)),
-    statuses: [...(workflow.statuses || [])].map((status) => ({
-      ...status,
-      color: status.color || DEFAULT_STAGE_COLOR,
-    })),
-    transition_rules: (workflow.transition_rules || []).map((rule) => ({
-      ...rule,
-      allowed_roles: rule.allowed_roles || [],
-      proof_requirements: rule.proof_requirements || [],
-    })),
     transitions: (workflow.transitions || []).map((transition) => ({
       ...transition,
       from_stage_color: transition.from_stage_color || DEFAULT_STAGE_COLOR,
@@ -307,14 +270,14 @@ function buildTransitionTargets(
     ]
     return destinations.map((destination) => ({
       stage: destination,
-      roles: rolesByTarget.get(destination.id) ?? [...ROLE_OPTIONS],
+      roles: rolesByTarget.get(destination.id) || [],
     }))
   }
 
   if (stage.stage_type === "PAUSED") {
     return getStageListByType(workflow, ["GENERAL"]).map((destination) => ({
       stage: destination,
-      roles: rolesByTarget.get(destination.id) ?? [...ROLE_OPTIONS],
+      roles: rolesByTarget.get(destination.id) || [],
     }))
   }
 
@@ -339,7 +302,6 @@ export default function WorkflowBuilderPage() {
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = useState(false)
   const [connectorLines, setConnectorLines] = useState<ConnectorLine[]>([])
   const [configPanelWidth, setConfigPanelWidth] = useState(352)
-  const [showAdvancedTransitions, setShowAdvancedTransitions] = useState(false)
   const stageMapRef = useRef<HTMLDivElement | null>(null)
   const stageRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
@@ -391,7 +353,6 @@ export default function WorkflowBuilderPage() {
   useEffect(() => {
     setCustomStageColor(selectedStage?.color || DEFAULT_STAGE_COLOR)
     setIsCustomColorPickerOpen(false)
-    setShowAdvancedTransitions(false)
   }, [selectedStage?.id, selectedStage?.color])
 
   useEffect(() => {
@@ -686,25 +647,6 @@ export default function WorkflowBuilderPage() {
         body: JSON.stringify({
           version: selectedWorkflow.version,
           name: selectedWorkflow.name,
-          statuses: selectedWorkflow.statuses.map((status) => ({
-            id: status.id > 0 ? status.id : null,
-            name: status.name,
-            order: status.order,
-            is_terminal: status.is_terminal,
-            color: status.color || DEFAULT_STAGE_COLOR,
-          })),
-          transition_rules: selectedWorkflow.transition_rules.map((rule) => ({
-            from_status: rule.from_status,
-            from_status_name: rule.from_status_name,
-            to_status: rule.to_status,
-            to_status_name: rule.to_status_name,
-            allowed_roles: rule.allowed_roles || [],
-            proof_requirements: (rule.proof_requirements || []).map((req) => ({
-              type: req.type,
-              label: req.label,
-              is_mandatory: req.is_mandatory,
-            })),
-          })),
           stages: selectedWorkflow.stages.map((stage) => ({
             id: stage.id > 0 ? stage.id : null,
             name: stage.name,
@@ -1398,79 +1340,47 @@ export default function WorkflowBuilderPage() {
 
                     <div className="space-y-2 rounded-xl border border-neutral-200 p-3">
                       <p className="text-sm font-medium text-slate-800">Outgoing Transition Roles</p>
-                      {transitionTargets.length ? (() => {
-                        const normalTargets = transitionTargets.filter(
-                          (target) => target.stage.stage_type !== "PAUSED"
-                        )
-                        const pausedTargets = selectedStage.stage_type === "PAUSED"
-                          ? transitionTargets
-                          : transitionTargets.filter((target) => target.stage.stage_type === "PAUSED")
-                        const renderTarget = (target: { stage: WorkflowStage; roles: string[] }) => (
-                          <div
-                            key={target.stage.id}
-                            className="rounded-lg border border-neutral-200 p-3"
-                          >
-                            <p className="text-xs font-medium text-slate-800">
-                              {selectedStage.name} → {target.stage.name}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              {STAGE_TYPE_LABELS[target.stage.stage_type]}
-                            </p>
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                              {ROLE_OPTIONS.map((role) => {
-                                const checked = target.roles.includes(role)
-                                return (
-                                  <label
-                                    key={role}
-                                    className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-xs text-slate-700"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={(e) => {
-                                        const nextRoles = e.target.checked
-                                          ? Array.from(new Set([...target.roles, role]))
-                                          : target.roles.filter((item) => item !== role)
-                                        updateTransitionRoles(selectedStage.id, target.stage.id, nextRoles)
-                                      }}
-                                      className="h-3.5 w-3.5"
-                                    />
-                                    {formatRoleLabel(role)}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )
-                        return (
-                          <div className="space-y-3">
-                            {selectedStage.stage_type === "PAUSED"
-                              ? pausedTargets.map(renderTarget)
-                              : normalTargets.map(renderTarget)
-                            }
-                            {selectedStage.stage_type !== "PAUSED" && pausedTargets.length > 0 && (
-                              <div className="rounded-lg border border-neutral-200">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAdvancedTransitions((prev) => !prev)}
-                                  className="flex w-full items-center justify-between px-3 py-2 text-xs text-slate-500 hover:bg-neutral-50 rounded-lg"
-                                >
-                                  <span className="font-medium text-slate-700">Advanced Configuration</span>
-                                  <span className="text-[11px]">{showAdvancedTransitions ? "▲ Hide" : "▼ Show"}</span>
-                                </button>
-                                {showAdvancedTransitions && (
-                                  <div className="space-y-3 border-t border-neutral-200 p-3">
-                                    <p className="text-[11px] text-slate-500">
-                                      Controls who can move tasks into paused stages from this stage.
-                                    </p>
-                                    {pausedTargets.map(renderTarget)}
-                                  </div>
-                                )}
+                      {transitionTargets.length ? (
+                        <div className="space-y-3">
+                          {transitionTargets.map((target) => (
+                            <div
+                              key={target.stage.id}
+                              className="rounded-lg border border-neutral-200 p-3"
+                            >
+                              <p className="text-xs font-medium text-slate-800">
+                                {selectedStage.name} → {target.stage.name}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                {STAGE_TYPE_LABELS[target.stage.stage_type]}
+                              </p>
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                {ROLE_OPTIONS.map((role) => {
+                                  const checked = target.roles.includes(role)
+                                  return (
+                                    <label
+                                      key={role}
+                                      className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-xs text-slate-700"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(e) => {
+                                          const nextRoles = e.target.checked
+                                            ? Array.from(new Set([...target.roles, role]))
+                                            : target.roles.filter((item) => item !== role)
+                                          updateTransitionRoles(selectedStage.id, target.stage.id, nextRoles)
+                                        }}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                      {formatRoleLabel(role)}
+                                    </label>
+                                  )
+                                })}
                               </div>
-                            )}
-                          </div>
-                        )
-                      })() : (
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
                         <p className="text-xs text-slate-500">
                           This stage has no valid outgoing transitions in its current zone.
                         </p>

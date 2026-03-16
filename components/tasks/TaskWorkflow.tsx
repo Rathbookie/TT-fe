@@ -72,6 +72,7 @@ export default function TaskWorkflow({
 
   const transitions = useMemo(() => {
     if (!workflow || !task.stage?.id) return []
+    const normalizedRole = activeRole.toUpperCase().replace(/ /g, "_")
     return workflow.transitions
       .filter(
         (transition) =>
