@@ -6,7 +6,6 @@ import { useAuth } from "@/context/AuthContext"
 import TaskWorkflow from "./TaskWorkflow"
 import { TaskStatus } from "@/lib/statusConfig"
 import TaskAttachmentsPreview from "./TaskAttachmentsPreview"
-import ReceiverProgressUpload from "./ReceiverProgressUpload"
 import TaskProofs from "./TaskProofs"
 import Badge from "@/components/ui/Badge"
 import { Task } from "@/types/task"
@@ -307,17 +306,6 @@ export default function TaskDrawer({
               showCommentInput
             />
           </div>
-        )}
-
-        {activeRole === "TASK_RECEIVER" &&
-          !isTerminal &&
-          !task.status_detail?.is_cancelled && (
-            <ReceiverProgressUpload
-              task={task}
-              onStatusChange={(updatedTask) => {
-                updateTaskInState(updatedTask)
-              }}
-            />
         )}
 
         {activeRole === "TASK_CREATOR" && (

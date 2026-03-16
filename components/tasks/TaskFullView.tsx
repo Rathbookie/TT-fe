@@ -110,33 +110,13 @@ export default function TaskFullView({
   const [selectedStageId, setSelectedStageId] = useState<number | null>(
     task?.stage?.id ?? null
   )
-  const [selectedCreateStatusId, setSelectedCreateStatusId] = useState<number | null>(
-    task?.status_detail?.id ?? null
-  )
+
   const [selectedParentTaskId] = useState<number | null>(parentTask?.id ?? null)
   const selectedWorkflowStage = workflows
     .find((workflow) => workflow.id === selectedWorkflowId)
     ?.stages?.find((stage) => stage.id === selectedStageId)
   const selectedStageIsPausable = Boolean(selectedWorkflowStage?.is_pausable || needsPauseReason)
 
-  const resolveBoardStatusIdForStage = (
-    boardId: number | null,
-    workflowId: number | null,
-    stageId: number | null
-  ) => {
-    const board = boards.find((item) => item.id === boardId)
-    if (!board) return null
-    const workflow = workflows.find((item) => item.id === workflowId)
-    const stage = workflow?.stages?.find((item) => item.id === stageId)
-    const matchedStatus = stage
-      ? board.statuses.find((status) => status.name.trim().toLowerCase() === stage.name.trim().toLowerCase())
-      : null
-    if (matchedStatus) return matchedStatus.id
-    const defaultStatus =
-      board.statuses.find((status) => status.is_default) ||
-      [...board.statuses].sort((a, b) => a.order - b.order)[0]
-    return defaultStatus?.id ?? null
-  }
 
   // -----------------------------
 // DIRTY STATE DETECTION
@@ -213,12 +193,6 @@ const original = task
     }
   }, [initialBoardId, isCreate, task?.workflow?.id])
 
-  useEffect(() => {
-    if (!isCreate) return
-    setSelectedCreateStatusId(
-      resolveBoardStatusIdForStage(selectedBoardId, selectedWorkflowId, selectedStageId)
-    )
-  }, [boards, workflows, isCreate, selectedBoardId, selectedWorkflowId, selectedStageId])
 
   const handleSave = async () => {
     if (!title || !priority || assignees.length === 0 || !dueDate || !selectedBoardId) {
@@ -260,11 +234,6 @@ const original = task
         }
         if (selectedStageId) {
           formData.append("stage_id", String(selectedStageId))
-        }
-        if (selectedCreateStatusId) {
-          formData.append("status_id", String(selectedCreateStatusId))
-        } else {
-          formData.append("status", "NOT_STARTED")
         }
       }
 
@@ -483,14 +452,14 @@ const original = task
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium">Stage</label>
+              <label className="text-xs font-medium">Initial Status</label>
               <select
                 value={selectedStageId ?? ""}
                 onChange={(e) => setSelectedStageId(Number(e.target.value) || null)}
                 className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
                 disabled={!selectedWorkflowId}
               >
-                <option value="">Auto</option>
+                <option value="">Auto (first stage)</option>
                 {(workflows.find((workflow) => workflow.id === selectedWorkflowId) as (WorkflowOption & { stages?: Array<{ id: number; name: string }> }) | undefined)?.stages?.map((stage) => (
                   <option key={stage.id} value={stage.id}>
                     {stage.name}
@@ -505,11 +474,6 @@ const original = task
                 onChange={(e) => {
                   const boardId = Number(e.target.value)
                   setSelectedBoardId(boardId || null)
-                  const board = boards.find((b) => b.id === boardId)
-                  const defaultStatus =
-                    board?.statuses.find((s) => s.is_default) ||
-                    [...(board?.statuses || [])].sort((a, b) => a.order - b.order)[0]
-                  setSelectedCreateStatusId(defaultStatus?.id ?? null)
                 }}
                 className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
                 disabled={Boolean(selectedParentTaskId)}
@@ -518,22 +482,6 @@ const original = task
                 {boards.map((board) => (
                   <option key={board.id} value={board.id}>
                     {board.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-medium">Initial Status</label>
-              <select
-                value={selectedCreateStatusId ?? ""}
-                onChange={(e) => setSelectedCreateStatusId(Number(e.target.value) || null)}
-                className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-black"
-                disabled={!selectedBoardId}
-              >
-                <option value="">Auto (board default)</option>
-                {statusOptions.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
                   </option>
                 ))}
               </select>
